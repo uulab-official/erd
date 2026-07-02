@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const setEndpoint = vi.fn().mockReturnThis();
 const setProject = vi.fn().mockReturnThis();
+const ping = vi.fn().mockResolvedValue(undefined);
 
 class FakeClient {
   setEndpoint = setEndpoint;
   setProject = setProject;
+  ping = ping;
 }
 
 class FakeAppwriteException extends Error {
@@ -44,7 +46,7 @@ vi.mock("appwrite", () => ({
   ID: { unique: () => "generated-id" },
 }));
 
-const { createAppwriteClient } = await import("./client.js");
+const { createAppwriteClient, pingAppwrite } = await import("./client.js");
 const { createAuthService } = await import("./auth.js");
 const { createAppwriteModelStore } = await import("./modelStore.js");
 
@@ -57,6 +59,18 @@ describe("createAppwriteClient", () => {
     createAppwriteClient({ endpoint: "https://appwrite.example/v1", projectId: "proj-1" });
     expect(setEndpoint).toHaveBeenCalledWith("https://appwrite.example/v1");
     expect(setProject).toHaveBeenCalledWith("proj-1");
+  });
+});
+
+describe("pingAppwrite", () => {
+  it("calls Client.ping()", async () => {
+    await pingAppwrite(new FakeClient() as never);
+    expect(ping).toHaveBeenCalledTimes(1);
+  });
+
+  it("propagates a rejection when the endpoint is unreachable", async () => {
+    ping.mockRejectedValueOnce(new Error("network error"));
+    await expect(pingAppwrite(new FakeClient() as never)).rejects.toThrow("network error");
   });
 });
 
