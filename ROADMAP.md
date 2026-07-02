@@ -10,7 +10,7 @@ Phase 구분은 [ARCHITECTURE.md#mvp-우선순위](ARCHITECTURE.md#mvp-우선순
 - [x] AppwriteAdapter (Collection/Attribute/Index/Relationship 매핑, Migration Plan, Rollback) — [PR #3](https://github.com/uulab-official/erd/pull/3)
 - [x] React Flow 기반 ERD 캔버스 + 로그인 게이트 + Validation/Deploy Plan 패널 — [PR #4](https://github.com/uulab-official/erd/pull/4)
 - [x] Export: SVG / PNG / PDF / Markdown / JSON — [PR #5](https://github.com/uulab-official/erd/pull/5)
-- [x] Appwrite Import — `appwrite.json`(Appwrite CLI export) 파일을 파싱해 Model로 가져오기, `$id` 암묵적 PK 합성 — [PR #10](https://github.com/uulab-official/erd/pull/10)
+- [x] Appwrite Import — `appwrite.json`(Appwrite CLI export) 파일을 파싱해 Model로 가져오기, `$id` 암묵적 PK 합성 — [PR #9](https://github.com/uulab-official/erd/pull/9)
 - [ ] Appwrite 실시간(live) Collection Import — 위는 정적 `appwrite.json` 파일 기반이고, Databases API로 실제 배포된 Collection을 직접 읽어오는 것은 여전히 서버사이드 admin 연결이 필요함 (아래 "진행 중 알아두면 좋은 것" 참고)
 - [ ] Appwrite Deploy 실행 (현재는 Plan 미리보기만 UI에 있음 — `apply()`는 서버사이드 `AppwriteAdminAPI` 구현체가 필요, Appwrite Function으로 별도 구현 예정)
 - [ ] "프로젝트" 개념 (현재는 단일 Model만 로드/저장. Project → 여러 Model, Dashboard, 즐겨찾기/최근 프로젝트 목록 필요)
