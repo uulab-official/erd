@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sqlExporter } from "./sql.js";
+import { mysqlExporter, sqlExporter, sqliteExporter } from "./sql.js";
 import type { Model } from "@modelforge/schema-engine";
 
 function shopModel(): Model {
@@ -77,5 +77,21 @@ describe("sqlExporter", () => {
 
   it("declares its target format", () => {
     expect(sqlExporter.targetFormat).toBe("sql");
+  });
+});
+
+describe("mysqlExporter", () => {
+  it("renders MySQL-flavored DDL (backtick identifiers, char(36) for uuid)", async () => {
+    const sql = (await mysqlExporter.export(shopModel())) as string;
+    expect(sql).toContain("CREATE TABLE `customer`");
+    expect(sql).toContain("char(36)");
+  });
+});
+
+describe("sqliteExporter", () => {
+  it("inlines foreign keys instead of a separate ALTER TABLE", async () => {
+    const sql = (await sqliteExporter.export(shopModel())) as string;
+    expect(sql).toContain("FOREIGN KEY");
+    expect(sql).not.toContain("ALTER TABLE");
   });
 });

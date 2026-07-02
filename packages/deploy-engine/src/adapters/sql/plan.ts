@@ -1,3 +1,4 @@
+import type { AdapterKind } from "@modelforge/schema-engine";
 import type { Model } from "@modelforge/schema-engine";
 import type { MigrationPlan, MigrationStep } from "@modelforge/sdk";
 import type { SqlDialect } from "./dialect.js";
@@ -43,13 +44,18 @@ export function planSqlDeployment(
           destructive: false,
         });
       }
-      for (const fk of table.foreignKeys) {
-        steps.push({
-          action: "create-relationship",
-          target: `${table.name}.${fk.name}`,
-          sql: dialect.foreignKeyDDL(fk, table.name),
-          destructive: false,
-        });
+      // When the dialect can't ALTER TABLE ADD CONSTRAINT (SQLite), the FK is already
+      // inlined into the CREATE TABLE statement above — a separate step would just
+      // duplicate it with an empty .sql.
+      if (dialect.supportsAlterForeignKey) {
+        for (const fk of table.foreignKeys) {
+          steps.push({
+            action: "create-relationship",
+            target: `${table.name}.${fk.name}`,
+            sql: dialect.foreignKeyDDL(fk, table.name),
+            destructive: false,
+          });
+        }
       }
       continue;
     }
@@ -113,23 +119,41 @@ export function planSqlDeployment(
     const deployedFks = new Map(deployed.foreignKeys.map((fk) => [fk.name, fk]));
     for (const fk of table.foreignKeys) {
       if (!deployedFks.has(fk.name)) {
-        steps.push({
-          action: "create-relationship",
-          target: `${table.name}.${fk.name}`,
-          sql: dialect.foreignKeyDDL(fk, table.name),
-          destructive: false,
-        });
+        steps.push(
+          dialect.supportsAlterForeignKey
+            ? {
+                action: "create-relationship",
+                target: `${table.name}.${fk.name}`,
+                sql: dialect.foreignKeyDDL(fk, table.name),
+                destructive: false,
+              }
+            : {
+                action: "create-relationship",
+                target: `${table.name}.${fk.name}`,
+                destructive: false,
+                warning: `${dialect.name} does not support adding foreign keys via ALTER TABLE — recreate "${table.name}" to add this constraint`,
+              },
+        );
       }
     }
     const currentFkNames = new Set(table.foreignKeys.map((fk) => fk.name));
     for (const fk of deployed.foreignKeys) {
       if (!currentFkNames.has(fk.name)) {
-        steps.push({
-          action: "drop-relationship",
-          target: `${table.name}.${fk.name}`,
-          sql: `ALTER TABLE ${q(table.name)} DROP CONSTRAINT ${q(fk.name)};`,
-          destructive: true,
-        });
+        steps.push(
+          dialect.supportsAlterForeignKey
+            ? {
+                action: "drop-relationship",
+                target: `${table.name}.${fk.name}`,
+                sql: `ALTER TABLE ${q(table.name)} DROP CONSTRAINT ${q(fk.name)};`,
+                destructive: true,
+              }
+            : {
+                action: "drop-relationship",
+                target: `${table.name}.${fk.name}`,
+                destructive: true,
+                warning: `${dialect.name} does not support dropping foreign keys via ALTER TABLE — recreate "${table.name}" without this constraint`,
+              },
+        );
       }
     }
   }
@@ -147,7 +171,7 @@ export function planSqlDeployment(
     }
   }
 
-  return { id: nextPlanId(), adapterKind: "postgresql", steps };
+  return { id: nextPlanId(), adapterKind: dialect.name as AdapterKind, steps };
 }
 
 // Best-effort inverse, same policy as rollbackAppwritePlan: creates invert cleanly to
@@ -155,7 +179,7 @@ export function planSqlDeployment(
 // un-deleted automatically.
 export function rollbackSqlPlan(plan: MigrationPlan): MigrationPlan {
   const steps = [...plan.steps].reverse().map(rollbackStep);
-  return { id: nextPlanId(), adapterKind: "postgresql", steps };
+  return { id: nextPlanId(), adapterKind: plan.adapterKind, steps };
 }
 
 function rollbackStep(step: MigrationStep): MigrationStep {

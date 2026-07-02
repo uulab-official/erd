@@ -29,7 +29,7 @@ Phase 구분은 [ARCHITECTURE.md#mvp-우선순위](ARCHITECTURE.md#mvp-우선순
 
 - [ ] AI ERD 생성/수정 (`AIProvider` 플러그인 인터페이스는 `packages/sdk`에 정의됨 — 실제 Provider 구현 필요)
 - [ ] ORM Generator (Prisma/Drizzle/TypeORM/JPA/Hibernate/Entity Framework)
-- [x] SQL Generator/Adapter — PostgreSQL(`SqlDialect`/`createPostgreSQLAdapter`, DDL Export, Deploy Plan) — [PR #11](https://github.com/uulab-official/erd/pull/11). MySQL/SQLite는 아직 (같은 `SqlDialect` 인터페이스로 새 dialect만 추가하면 됨)
+- [x] SQL Generator/Adapter — PostgreSQL/MySQL/SQLite 3개 dialect 전부 구현 (`SqlDialect` 공통 팩토리, DDL Export, Deploy Plan) — [PR #10](https://github.com/uulab-official/erd/pull/10), [PR #11](https://github.com/uulab-official/erd/pull/11). SQLite는 `ALTER TABLE`로 FK를 추가할 수 없어 `CREATE TABLE`에 인라인으로 넣는다(`supportsAlterForeignKey: false`) — 이미 배포된 테이블에 FK를 새로 추가/삭제하는 경우는 SQL 없이 "테이블 재생성 필요" 경고만 낸다.
 - [ ] OpenAPI/Swagger/GraphQL SDL Generator
 - [ ] 실시간 협업 (Appwrite Realtime — Cursor/Selection/Lock/Presence)
 - [ ] 댓글

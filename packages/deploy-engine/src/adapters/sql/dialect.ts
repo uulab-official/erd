@@ -12,6 +12,10 @@ export interface ReverseMappedType {
 // DatabaseAdapter from scratch. See "공통 헬퍼: SqlDialect" in /docs/adapters.md.
 export interface SqlDialect {
   readonly name: string;
+  // SQLite has no ALTER TABLE ... ADD CONSTRAINT — foreign keys can only be declared
+  // inline inside CREATE TABLE. createSqlDialect() uses this to decide whether
+  // createTableDDL should inline FK clauses and whether foreignKeyDDL emits anything.
+  readonly supportsAlterForeignKey: boolean;
   quoteIdentifier(name: string): string;
   mapType(type: ColumnType, length?: number, scale?: number): string;
   // Structural introspection (e.g. via `pg`) would build a SqlNativeSchema directly from
@@ -21,6 +25,8 @@ export interface SqlDialect {
   columnDDL(column: SqlColumnDef): string;
   createTableDDL(table: SqlTableDef): string;
   createIndexDDL(index: SqlIndexDef, tableName: string): string;
+  // Returns "" for a dialect where foreign keys are inline-only (see
+  // supportsAlterForeignKey) — the constraint is already part of createTableDDL.
   foreignKeyDDL(fk: SqlForeignKeyDef, ownerTableName: string): string;
 }
 
@@ -42,6 +48,60 @@ function referentialActionSql(action: SqlForeignKeyDef["onDelete"]): string {
     default:
       return "RESTRICT";
   }
+}
+
+export interface SqlDialectOptions {
+  name: string;
+  supportsAlterForeignKey: boolean;
+  quoteIdentifier(name: string): string;
+  mapType: SqlDialect["mapType"];
+  mapTypeBack: SqlDialect["mapTypeBack"];
+}
+
+// Generic implementation of columnDDL/createTableDDL/createIndexDDL/foreignKeyDDL shared
+// across dialects — each dialect only supplies identifier quoting, type mapping, and
+// whether it supports ALTER TABLE ... ADD CONSTRAINT for foreign keys.
+export function createSqlDialect(options: SqlDialectOptions): SqlDialect {
+  const { quoteIdentifier, supportsAlterForeignKey } = options;
+
+  const columnDDL: SqlDialect["columnDDL"] = (column) =>
+    `${quoteIdentifier(column.name)} ${column.type}${column.nullable ? "" : " NOT NULL"}${formatDefault(column.default)}`;
+
+  const inlineForeignKeyDDL = (fk: SqlForeignKeyDef): string =>
+    `FOREIGN KEY (${fk.columns.map(quoteIdentifier).join(", ")}) REFERENCES ${quoteIdentifier(fk.referencedTable)} (${fk.referencedColumns.map(quoteIdentifier).join(", ")}) ON DELETE ${referentialActionSql(fk.onDelete)} ON UPDATE ${referentialActionSql(fk.onUpdate)}`;
+
+  const createTableDDL: SqlDialect["createTableDDL"] = (table) => {
+    const lines = table.columns.map(columnDDL);
+    if (table.primaryKey.length > 0) {
+      lines.push(`PRIMARY KEY (${table.primaryKey.map(quoteIdentifier).join(", ")})`);
+    }
+    if (!supportsAlterForeignKey) {
+      for (const fk of table.foreignKeys) {
+        lines.push(inlineForeignKeyDDL(fk));
+      }
+    }
+    return `CREATE TABLE ${quoteIdentifier(table.name)} (\n  ${lines.join(",\n  ")}\n);`;
+  };
+
+  const createIndexDDL: SqlDialect["createIndexDDL"] = (index, tableName) =>
+    `CREATE ${index.unique ? "UNIQUE " : ""}INDEX ${quoteIdentifier(index.name)} ON ${quoteIdentifier(tableName)} (${index.columns.map(quoteIdentifier).join(", ")});`;
+
+  const foreignKeyDDL: SqlDialect["foreignKeyDDL"] = (fk, ownerTableName) =>
+    supportsAlterForeignKey
+      ? `ALTER TABLE ${quoteIdentifier(ownerTableName)} ADD CONSTRAINT ${quoteIdentifier(fk.name)} ${inlineForeignKeyDDL(fk)};`
+      : "";
+
+  return {
+    name: options.name,
+    supportsAlterForeignKey,
+    quoteIdentifier,
+    mapType: options.mapType,
+    mapTypeBack: options.mapTypeBack,
+    columnDDL,
+    createTableDDL,
+    createIndexDDL,
+    foreignKeyDDL,
+  };
 }
 
 export function createPostgresDialect(): SqlDialect {
@@ -95,31 +155,11 @@ export function createPostgresDialect(): SqlDialect {
     }
   };
 
-  const columnDDL: SqlDialect["columnDDL"] = (column) =>
-    `${quoteIdentifier(column.name)} ${column.type}${column.nullable ? "" : " NOT NULL"}${formatDefault(column.default)}`;
-
-  const createTableDDL: SqlDialect["createTableDDL"] = (table) => {
-    const lines = table.columns.map(columnDDL);
-    if (table.primaryKey.length > 0) {
-      lines.push(`PRIMARY KEY (${table.primaryKey.map(quoteIdentifier).join(", ")})`);
-    }
-    return `CREATE TABLE ${quoteIdentifier(table.name)} (\n  ${lines.join(",\n  ")}\n);`;
-  };
-
-  const createIndexDDL: SqlDialect["createIndexDDL"] = (index, tableName) =>
-    `CREATE ${index.unique ? "UNIQUE " : ""}INDEX ${quoteIdentifier(index.name)} ON ${quoteIdentifier(tableName)} (${index.columns.map(quoteIdentifier).join(", ")});`;
-
-  const foreignKeyDDL: SqlDialect["foreignKeyDDL"] = (fk, ownerTableName) =>
-    `ALTER TABLE ${quoteIdentifier(ownerTableName)} ADD CONSTRAINT ${quoteIdentifier(fk.name)} FOREIGN KEY (${fk.columns.map(quoteIdentifier).join(", ")}) REFERENCES ${quoteIdentifier(fk.referencedTable)} (${fk.referencedColumns.map(quoteIdentifier).join(", ")}) ON DELETE ${referentialActionSql(fk.onDelete)} ON UPDATE ${referentialActionSql(fk.onUpdate)};`;
-
-  return {
+  return createSqlDialect({
     name: "postgresql",
+    supportsAlterForeignKey: true,
     quoteIdentifier,
     mapType,
     mapTypeBack,
-    columnDDL,
-    createTableDDL,
-    createIndexDDL,
-    foreignKeyDDL,
-  };
+  });
 }

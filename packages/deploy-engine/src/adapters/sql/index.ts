@@ -1,5 +1,7 @@
 export * from "./types.js";
 export * from "./dialect.js";
+export * from "./mysql.js";
+export * from "./sqlite.js";
 export { toNativeSchema as toSqlNativeSchema } from "./toNativeSchema.js";
 export { fromNativeSchema as fromSqlNativeSchema } from "./fromNativeSchema.js";
 export * from "./render.js";

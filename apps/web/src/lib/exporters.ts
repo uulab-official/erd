@@ -2,8 +2,10 @@ import { jsPDF } from "jspdf";
 import {
   jsonExporter,
   markdownExporter,
+  mysqlExporter,
   renderSvg,
   sqlExporter,
+  sqliteExporter,
   svgExporter,
 } from "@modelforge/generator";
 import type { Model } from "@modelforge/schema-engine";
@@ -87,6 +89,8 @@ export const exporters: Exporter[] = [
   markdownExporter,
   jsonExporter,
   sqlExporter,
+  mysqlExporter,
+  sqliteExporter,
 ];
 
 const EXTENSION_BY_FORMAT: Record<string, string> = {
