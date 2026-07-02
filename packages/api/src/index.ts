@@ -2,7 +2,7 @@
 // See /docs/schema-engine.md (Project/Model containers) — the client never talks to
 // Appwrite directly; everything goes through this package.
 import type { Model } from "@modelforge/schema-engine";
-import type { ModelStore } from "./modelStore.js";
+import type { ModelStore, ModelVersion } from "./modelStore.js";
 
 export * from "./client.js";
 export * from "./auth.js";
@@ -19,6 +19,7 @@ export function createInMemoryModelStore(): ModelStore {
   // list() ordering deterministic (most-recently-saved first) regardless of clock ties.
   let sequence = 0;
   const savedAtSequence = new Map<string, number>();
+  const versions = new Map<string, ModelVersion[]>();
 
   return {
     async save(model) {
@@ -42,6 +43,27 @@ export function createInMemoryModelStore(): ModelStore {
       models.delete(modelId);
       updatedAt.delete(modelId);
       savedAtSequence.delete(modelId);
+      versions.delete(modelId);
+    },
+    async saveVersion(modelId, version) {
+      const existing = versions.get(modelId) ?? [];
+      versions.set(modelId, [...existing, version]);
+    },
+    async listVersions(modelId) {
+      return (versions.get(modelId) ?? []).map(({ id, label, createdAt }) => ({
+        id,
+        label,
+        createdAt,
+      }));
+    },
+    async getVersion(modelId, versionId) {
+      return (versions.get(modelId) ?? []).find((v) => v.id === versionId)?.snapshot ?? null;
+    },
+    async deleteVersion(modelId, versionId) {
+      versions.set(
+        modelId,
+        (versions.get(modelId) ?? []).filter((v) => v.id !== versionId),
+      );
     },
   };
 }

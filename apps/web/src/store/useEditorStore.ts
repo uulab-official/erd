@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { VersionSummary } from "@modelforge/api";
 import type { DictionaryEntry, Domain, Model, NamingRuleSet } from "@modelforge/schema-engine";
 import { validateModel, type ValidationIssue } from "@modelforge/schema-engine";
 import {
@@ -79,6 +80,19 @@ interface EditorState {
   updateDictionaryEntry(entryId: string, changes: UpdateDictionaryEntryPayload["changes"]): void;
   deleteDictionaryEntry(entryId: string): void;
   updateNamingRuleSet(namingRules: NamingRuleSet | undefined): void;
+  // Versioning (erwin "Baseline" / erdcloud version history) — snapshots live alongside
+  // the Model document in ModelStore, not in this in-memory state, so they survive reloads.
+  versions: VersionSummary[];
+  versionsLoading: boolean;
+  refreshVersions(): Promise<void>;
+  saveVersion(label: string): Promise<void>;
+  // Replaces the live model with a saved snapshot — treated like importModel (the new
+  // baseline for Diff), since restoring is "load this state", not "edit toward it".
+  restoreVersion(versionId: string): Promise<void>;
+  deleteVersion(versionId: string): Promise<void>;
+  // Used by the Versions tab to diff a version against the current model on demand,
+  // without holding every fetched snapshot in this store's state.
+  getVersionSnapshot(versionId: string): Promise<Model | null>;
 }
 
 // One undo/redo stack per loaded model — reassigned on load()/newModel() so undoing
@@ -104,6 +118,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   historyLog: [],
   saving: false,
   loading: false,
+  versions: [],
+  versionsLoading: false,
 
   addEntity(logicalName) {
     const id = crypto.randomUUID();
@@ -255,5 +271,47 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { model, operation } = updateNamingRuleSetOp(get().model, { namingRules }, ACTOR_ID);
     history.push(operation);
     set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  async refreshVersions() {
+    set({ versionsLoading: true });
+    try {
+      const versions = await getModelStore().listVersions(get().model.id);
+      set({ versions });
+    } finally {
+      set({ versionsLoading: false });
+    }
+  },
+
+  async saveVersion(label) {
+    const model = get().model;
+    await getModelStore().saveVersion(model.id, {
+      id: crypto.randomUUID(),
+      label,
+      createdAt: new Date().toISOString(),
+      snapshot: model,
+    });
+    await get().refreshVersions();
+  },
+
+  async restoreVersion(versionId) {
+    const snapshot = await getModelStore().getVersion(get().model.id, versionId);
+    if (!snapshot) return;
+    history = new OperationHistory();
+    set({
+      model: snapshot,
+      savedModel: snapshot,
+      issues: validateModel(snapshot),
+      ...historyFlags(),
+    });
+  },
+
+  async deleteVersion(versionId) {
+    await getModelStore().deleteVersion(get().model.id, versionId);
+    await get().refreshVersions();
+  },
+
+  async getVersionSnapshot(versionId) {
+    return getModelStore().getVersion(get().model.id, versionId);
   },
 }));

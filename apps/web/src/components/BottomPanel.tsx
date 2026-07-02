@@ -5,8 +5,9 @@ import type { DeployResult } from "@modelforge/sdk";
 import { useEditorStore } from "../store/useEditorStore.js";
 import { canDeploy, deployPlan } from "../lib/appwrite.js";
 import { GovernancePanel } from "./GovernancePanel.js";
+import { VersionsPanel } from "./VersionsPanel.js";
 
-type Tab = "validation" | "diff" | "history" | "deploy" | "governance";
+type Tab = "validation" | "diff" | "history" | "deploy" | "governance" | "versions";
 
 export function BottomPanel() {
   const [tab, setTab] = useState<Tab>("validation");
@@ -75,6 +76,12 @@ export function BottomPanel() {
           onClick={() => setTab("governance")}
         >
           Governance
+        </button>
+        <button
+          className={tab === "versions" ? "font-semibold" : "text-neutral-500"}
+          onClick={() => setTab("versions")}
+        >
+          Versions
         </button>
       </div>
 
@@ -167,6 +174,7 @@ export function BottomPanel() {
       )}
 
       {tab === "governance" && <GovernancePanel />}
+      {tab === "versions" && <VersionsPanel />}
     </div>
   );
 }

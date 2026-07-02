@@ -183,6 +183,88 @@ describe("createAppwriteModelStore", () => {
     deleteDocument.mockRejectedValueOnce(new FakeAppwriteException("not found", 404));
     await expect(store.remove("missing")).resolves.toBeUndefined();
   });
+
+  const version = {
+    id: "v1",
+    label: "First cut",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    snapshot: model,
+  };
+
+  it("saveVersion reads the existing versions, appends, and writes back", async () => {
+    getDocument.mockResolvedValueOnce({ data: JSON.stringify(model), name: "Shop" });
+    updateDocument.mockResolvedValueOnce({});
+    const store = createAppwriteModelStore(new FakeClient() as never, config);
+    await store.saveVersion("m1", version);
+    expect(updateDocument).toHaveBeenCalledWith("db-1", "models", "m1", {
+      versions: JSON.stringify([version]),
+    });
+  });
+
+  it("saveVersion appends onto an existing versions array rather than overwriting it", async () => {
+    getDocument.mockResolvedValueOnce({
+      data: JSON.stringify(model),
+      name: "Shop",
+      versions: JSON.stringify([version]),
+    });
+    updateDocument.mockResolvedValueOnce({});
+    const secondVersion = { ...version, id: "v2", label: "Second cut" };
+    const store = createAppwriteModelStore(new FakeClient() as never, config);
+    await store.saveVersion("m1", secondVersion);
+    expect(updateDocument).toHaveBeenCalledWith("db-1", "models", "m1", {
+      versions: JSON.stringify([version, secondVersion]),
+    });
+  });
+
+  it("listVersions returns summaries without the snapshot body", async () => {
+    getDocument.mockResolvedValueOnce({
+      data: JSON.stringify(model),
+      name: "Shop",
+      versions: JSON.stringify([version]),
+    });
+    const store = createAppwriteModelStore(new FakeClient() as never, config);
+    expect(await store.listVersions("m1")).toEqual([
+      { id: "v1", label: "First cut", createdAt: "2026-01-01T00:00:00.000Z" },
+    ]);
+  });
+
+  it("listVersions returns an empty array for a document with no versions attribute yet", async () => {
+    getDocument.mockResolvedValueOnce({ data: JSON.stringify(model), name: "Shop" });
+    const store = createAppwriteModelStore(new FakeClient() as never, config);
+    expect(await store.listVersions("m1")).toEqual([]);
+  });
+
+  it("getVersion returns the matching snapshot, or null when missing", async () => {
+    getDocument.mockResolvedValueOnce({
+      data: JSON.stringify(model),
+      name: "Shop",
+      versions: JSON.stringify([version]),
+    });
+    const store = createAppwriteModelStore(new FakeClient() as never, config);
+    expect(await store.getVersion("m1", "v1")).toEqual(model);
+
+    getDocument.mockResolvedValueOnce({
+      data: JSON.stringify(model),
+      name: "Shop",
+      versions: JSON.stringify([version]),
+    });
+    expect(await store.getVersion("m1", "missing")).toBeNull();
+  });
+
+  it("deleteVersion removes only the matching version", async () => {
+    const secondVersion = { ...version, id: "v2", label: "Second cut" };
+    getDocument.mockResolvedValueOnce({
+      data: JSON.stringify(model),
+      name: "Shop",
+      versions: JSON.stringify([version, secondVersion]),
+    });
+    updateDocument.mockResolvedValueOnce({});
+    const store = createAppwriteModelStore(new FakeClient() as never, config);
+    await store.deleteVersion("m1", "v1");
+    expect(updateDocument).toHaveBeenCalledWith("db-1", "models", "m1", {
+      versions: JSON.stringify([secondVersion]),
+    });
+  });
 });
 
 describe("invokeDeployFunction", () => {

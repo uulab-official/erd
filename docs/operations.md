@@ -93,6 +93,8 @@ interface Transaction {
 - `Merge` = 두 Branch의 Operation 로그를 3-way merge. 같은 대상(entityId/attributeId)에 대한 동시 수정은 Conflict로 표시하고 사용자 해결 UI(Compare)로 넘긴다.
 - `Rollback` = 특정 Commit 상태로 새 Commit을 생성 (히스토리를 지우지 않고 앞으로 되돌림).
 
+**구현 현황**: 위는 Phase 3의 Branch/Merge까지 포함한 전체 설계다. 지금 실제로 있는 건 그보다 훨씬 단순한 부분집합 — `ModelVersion`(`packages/api`의 `ModelStore.saveVersion`/`listVersions`/`getVersion`/`deleteVersion`)이 하나의 Model에 라벨 붙은 전체 스냅샷을 순서대로 쌓는다. Operation 로그 재생이 아니라 **스냅샷만** 저장하고(`Commit`의 "최종 상태 스냅샷" 절반), Branch/Merge/Conflict는 없다 — 항상 하나의 선형 타임라인이다. `Restore`는 그 스냅샷으로 현재 Model을 통째로 교체하는 것뿐이고(`Rollback`과 유사하되 새 Commit을 만들지 않고 되돌린 상태 자체가 현재 상태가 됨), Compare는 `diffModels(snapshot, currentModel)`로 Diff Engine을 그대로 재사용한다 — `apps/web`의 BottomPanel "Versions" 탭 참고.
+
 ## Diff Engine과의 관계
 
 Diff Engine은 두 모델 상태(현재 모델 vs 배포된 스냅샷, 또는 Branch A vs Branch B)를 비교해 **구조적 Operation 시퀀스**를 재구성한다. Canvas 전용 필드(`ui.*`)는 비교 대상에서 제외한다.
