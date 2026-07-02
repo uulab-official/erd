@@ -20,9 +20,9 @@ Phase 구분은 [ARCHITECTURE.md#mvp-우선순위](ARCHITECTURE.md#mvp-우선순
 - [x] Diff Engine UI 연동 — BottomPanel Diff 탭, Deploy Plan을 `savedModel` 기준 증분 계획으로 변경 — [PR #8](https://github.com/uulab-official/erd/pull/8)
 - [ ] Version (v1 → v2 → v3, Diff, Compare, Restore) — Diff 탭은 "마지막 저장 vs 현재"만 비교. 여러 버전을 저장/전환/복원하는 개념은 아직 없음
 - [x] Undo/Redo 히스토리 패널 — `OperationHistory.entries()`/`jumpToIndex()` + BottomPanel History 탭 — [PR #9](https://github.com/uulab-official/erd/pull/9)
-- [ ] Dictionary (기업 표준 용어 관리, 자동 추천)
-- [ ] Domain (Email/Phone/Money/... 타입 그룹, 변경 시 연결된 Attribute 일괄 갱신)
-- [ ] Naming Rules (Camel/Snake/Pascal, Prefix/Suffix, 예약어, 약어) — `validateModel`의 예약어 검사는 built-in 기본 목록만 사용 중, `NamingRuleSet.reservedWords` 연동 필요
+- [x] Dictionary (표준 용어 ↔ 표준명 매핑) — `Model.dictionary`, `AddDictionaryEntry`/`UpdateDictionaryEntry`/`DeleteDictionaryEntry` Operation, `validateModel`의 "abbreviation-suggested" 경고(이름에 약어로 바꿔야 할 단어가 그대로 풀어써 있으면 제안). 실시간 자동완성 UI는 아직 — BottomPanel Governance 탭에서 수동으로 관리 — [PR #17](https://github.com/uulab-official/erd/pull/17)
+- [x] Domain (Email/Phone/Money/... 타입 그룹, 변경 시 연결된 Attribute 일괄 갱신) — `Model.domains`, `AssignDomain`/`UnassignDomain`(Attribute의 type/length/scale을 즉시 동기화), `UpdateDomain`+`updateDomainCascade`(Domain 변경을 연결된 모든 Attribute에 파급, 하나의 Transaction으로 원자적 Undo), `validateModel`의 "domain-not-found"/"domain-drift" 검사 — [PR #17](https://github.com/uulab-official/erd/pull/17)
+- [x] Naming Rules (Camel/Snake/Pascal, Prefix/Suffix, 예약어, 약어) — `Model.namingRules`(`UpdateNamingRuleSet` Operation), `validateModel`이 이제 `DEFAULT_RESERVED_WORDS` ∪ `namingRules.reservedWords`를 함께 검사하고, case/prefix/suffix 위반과 abbreviation 제안까지 경고로 낸다 — [PR #17](https://github.com/uulab-official/erd/pull/17)
 - [x] Validation 규칙 확장 — 순환 식별관계, 중복 Index, 예약어 사용 — [PR #7](https://github.com/uulab-official/erd/pull/7)
 
 ## Phase 3
@@ -55,3 +55,6 @@ Phase 구분은 [ARCHITECTURE.md#mvp-우선순위](ARCHITECTURE.md#mvp-우선순
 - 이 Function은 정적 API 키가 아니라 Appwrite가 실행마다 주입하는 동적 `APPWRITE_FUNCTION_API_KEY`를 사용한다 (Function의 Execute/Scopes 설정에 따라 스코프가 제한됨). 대화 중 공유된 정적 API 키는 `apps/web/.env.local`의 `APPWRITE_API_KEY`에 보관용으로만 있고 어떤 코드도 읽지 않는다 — 채팅에 노출된 적이 있다면 Console에서 재발급 권장.
 - `modelsTableId` 컬렉션에 `name`(string) attribute를 추가해두면 Dashboard의 `list()`가 각 Model의 전체 `data` JSON을 파싱하지 않고도 이름을 보여줄 수 있다 — 필수는 아니다(그 attribute가 없는 기존 row는 `data`를 파싱해 이름을 채우는 fallback이 `packages/api`의 `createAppwriteModelStore`에 있음), 있으면 더 가볍다.
 - Model 목록에 사용자별 소유권/권한 분리(현재는 프로젝트 내 모든 Model이 공유되어 보임)는 아직 없다 — 이 앱의 다른 어떤 기능(Import/Deploy 등)도 아직 사용자별로 스코프되어 있지 않아서, 이번 Dashboard도 기존 보안 모델을 그대로 따른다. 실제 멀티테넌시가 필요해지면 Appwrite의 document-level permission(`Permission.read(Role.user(...))`)을 도입해야 한다.
+- `Domain`/`Dictionary`/`NamingRuleSet`은 `Model`에 붙는다(원래 `docs/schema-engine.md` 스펙 초안은 이걸 `Project`에 붙였음) — `Project`가 실제 영속화 계층이 없는 지금은 Model 단위가 더 단순하다. 여러 Model이 governance를 공유해야 하는 시나리오가 생기면 그때 끌어올린다.
+- `AssignDomain`/`UnassignDomain`의 inverse는 항상 "대상 Attribute의 정확한 이전 상태(domainId+type+length+scale)를 담은 `UnassignDomain`"이지, "그 Domain으로 다시 assign"이 아니다 — `updateDomainCascade`/`deleteDomainCascade`처럼 Domain 자체와 그걸 참조하는 Attribute들을 같은 Transaction에서 함께 undo할 때, inverse가 Domain을 다시 조회해서 값을 가져오면 undo 순서에 따라 Domain이 아직 되돌려지지 않은 상태를 읽어버리는 버그가 생긴다 (실제로 겪음 — `packages/erd-engine/src/operations/attribute.ts`의 `priorDomainState` 주석 참고).
+- attribute 편집 UI(이름/타입/PK 등 변경)는 이번에도 여전히 없다 — Domain 배정은 BottomPanel Governance 탭에서 "entity.attribute" 플랫 목록으로 고른다. 일반 Attribute Inspector(엔티티 클릭 → 속성 목록 사이드패널)는 별도 작업으로 남아있다.

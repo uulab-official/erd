@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   addAttribute,
+  assignDomain,
   changeAttributeType,
   removeAttribute,
   renameAttribute,
   setAttributeDefault,
   setAttributeFlags,
+  unassignDomain,
 } from "./attribute.js";
 import { createEntity } from "./entity.js";
+import { createDomain } from "./governance.js";
 import { applyInverse } from "./apply.js";
 import { customerEntity, emptyModel } from "./test-fixtures.js";
 
@@ -98,6 +101,75 @@ describe("setAttributeDefault", () => {
       "user-1",
     );
     expect(model.entities[0]?.attributes[0]?.default).toBe("uuid_generate_v4()");
+    expect(applyInverse(model, operation)).toEqual(before);
+  });
+});
+
+const EMAIL_DOMAIN = { id: "d1", name: "Email", type: "string" as const, length: 320 };
+
+describe("assignDomain / unassignDomain", () => {
+  it("syncs type/length/scale from the domain and its inverse restores the prior values", () => {
+    const before = createDomain(baseModel(), { domain: EMAIL_DOMAIN }, "user-1").model;
+    const { model, operation } = assignDomain(
+      before,
+      { entityId: "customer", attributeId: "id", domainId: "d1" },
+      "user-1",
+    );
+    expect(model.entities[0]?.attributes[0]).toMatchObject({
+      domainId: "d1",
+      type: "string",
+      length: 320,
+    });
+    expect(applyInverse(model, operation)).toEqual(before);
+  });
+
+  it("rejects assigning a domain that doesn't exist", () => {
+    const before = baseModel();
+    expect(() =>
+      assignDomain(
+        before,
+        { entityId: "customer", attributeId: "id", domainId: "missing" },
+        "user-1",
+      ),
+    ).toThrow();
+  });
+
+  it("unassigning clears domainId but leaves type/length/scale as-is", () => {
+    const withDomain = createDomain(baseModel(), { domain: EMAIL_DOMAIN }, "user-1").model;
+    const before = assignDomain(
+      withDomain,
+      { entityId: "customer", attributeId: "id", domainId: "d1" },
+      "user-1",
+    ).model;
+    const { model, operation } = unassignDomain(
+      before,
+      { entityId: "customer", attributeId: "id" },
+      "user-1",
+    );
+    expect(model.entities[0]?.attributes[0]).toMatchObject({
+      domainId: undefined,
+      type: "string",
+      length: 320,
+    });
+    expect(applyInverse(model, operation)).toEqual(before);
+  });
+
+  it("re-assigning a different domain inverts back to the original domain link", () => {
+    const withDomains = createDomain(baseModel(), { domain: EMAIL_DOMAIN }, "user-1").model;
+    const secondDomain = { id: "d2", name: "Note", type: "string" as const, length: 1000 };
+    const withBothDomains = createDomain(withDomains, { domain: secondDomain }, "user-1").model;
+    const before = assignDomain(
+      withBothDomains,
+      { entityId: "customer", attributeId: "id", domainId: "d1" },
+      "user-1",
+    ).model;
+
+    const { model, operation } = assignDomain(
+      before,
+      { entityId: "customer", attributeId: "id", domainId: "d2" },
+      "user-1",
+    );
+    expect(model.entities[0]?.attributes[0]?.domainId).toBe("d2");
     expect(applyInverse(model, operation)).toEqual(before);
   });
 });

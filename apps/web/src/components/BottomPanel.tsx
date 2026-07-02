@@ -4,8 +4,9 @@ import { diffModels } from "@modelforge/diff-engine";
 import type { DeployResult } from "@modelforge/sdk";
 import { useEditorStore } from "../store/useEditorStore.js";
 import { canDeploy, deployPlan } from "../lib/appwrite.js";
+import { GovernancePanel } from "./GovernancePanel.js";
 
-type Tab = "validation" | "diff" | "history" | "deploy";
+type Tab = "validation" | "diff" | "history" | "deploy" | "governance";
 
 export function BottomPanel() {
   const [tab, setTab] = useState<Tab>("validation");
@@ -68,6 +69,12 @@ export function BottomPanel() {
           onClick={() => setTab("deploy")}
         >
           Deploy Plan ({plan.steps.length})
+        </button>
+        <button
+          className={tab === "governance" ? "font-semibold" : "text-neutral-500"}
+          onClick={() => setTab("governance")}
+        >
+          Governance
         </button>
       </div>
 
@@ -158,6 +165,8 @@ export function BottomPanel() {
           </ul>
         </div>
       )}
+
+      {tab === "governance" && <GovernancePanel />}
     </div>
   );
 }

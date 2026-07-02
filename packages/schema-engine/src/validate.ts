@@ -1,4 +1,4 @@
-import type { Model } from "./types.js";
+import type { Model, NamingRuleSet } from "./types.js";
 
 export interface ValidationIssue {
   severity: "error" | "warning";
@@ -184,6 +184,184 @@ function checkReservedWords(model: Model, reservedWords: string[]): ValidationIs
   return issues;
 }
 
+const CASE_PATTERNS: Record<NamingRuleSet["case"], RegExp> = {
+  snake: /^[a-z][a-z0-9]*(_[a-z0-9]+)*$/,
+  camel: /^[a-z][a-zA-Z0-9]*$/,
+  pascal: /^[A-Z][a-zA-Z0-9]*$/,
+  upper: /^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$/,
+  lower: /^[a-z][a-z0-9]*$/,
+};
+
+// Case rules are inherently fuzzy for single-word names (e.g. "id" satisfies every
+// pattern) — this only flags names that clearly violate the configured convention
+// (mixed case under snake_case, underscores under camelCase, etc.), not stylistic edge
+// cases. `namingRules.case` is a required field on NamingRuleSet, but the whole
+// NamingRuleSet is optional on Model — no rules configured means nothing to enforce.
+function checkNamingConventions(model: Model): ValidationIssue[] {
+  const rules = model.namingRules;
+  if (!rules) return [];
+  const issues: ValidationIssue[] = [];
+  const pattern = CASE_PATTERNS[rules.case];
+
+  function checkAffixes(
+    name: string,
+    prefix: string | undefined,
+    suffix: string | undefined,
+    kind: string,
+  ): string | undefined {
+    if (prefix && !name.startsWith(prefix)) return `should start with prefix "${prefix}"`;
+    if (suffix && !name.endsWith(suffix)) return `should end with suffix "${suffix}"`;
+    void kind;
+    return undefined;
+  }
+
+  for (const entity of model.entities) {
+    if (!pattern.test(entity.physicalName)) {
+      issues.push({
+        severity: "warning",
+        code: "naming-convention-violation",
+        message: `Entity physical name "${entity.physicalName}" doesn't match the configured ${rules.case} case.`,
+        entityId: entity.id,
+      });
+    }
+    const affixIssue = checkAffixes(
+      entity.physicalName,
+      rules.entityPrefix,
+      rules.entitySuffix,
+      "entity",
+    );
+    if (affixIssue) {
+      issues.push({
+        severity: "warning",
+        code: "naming-convention-violation",
+        message: `Entity physical name "${entity.physicalName}" ${affixIssue}.`,
+        entityId: entity.id,
+      });
+    }
+
+    for (const attr of entity.attributes) {
+      if (!pattern.test(attr.name)) {
+        issues.push({
+          severity: "warning",
+          code: "naming-convention-violation",
+          message: `Attribute "${attr.name}" on entity "${entity.logicalName}" doesn't match the configured ${rules.case} case.`,
+          entityId: entity.id,
+          attributeId: attr.id,
+        });
+      }
+      const attrAffixIssue = checkAffixes(
+        attr.name,
+        rules.attributePrefix,
+        rules.attributeSuffix,
+        "attribute",
+      );
+      if (attrAffixIssue) {
+        issues.push({
+          severity: "warning",
+          code: "naming-convention-violation",
+          message: `Attribute "${attr.name}" on entity "${entity.logicalName}" ${attrAffixIssue}.`,
+          entityId: entity.id,
+          attributeId: attr.id,
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
+// Suggests the configured abbreviation when a name spells out a word it has a shorthand
+// for (e.g. "customer_identifier" when abbreviations maps "identifier" -> "id") — split on
+// case/underscore boundaries so this works under any NamingRuleSet.case.
+function checkAbbreviations(model: Model): ValidationIssue[] {
+  const abbreviations: Record<string, string> = model.namingRules?.abbreviations ?? {};
+  if (Object.keys(abbreviations).length === 0) return [];
+  const issues: ValidationIssue[] = [];
+
+  function wordsOf(name: string): string[] {
+    return name
+      .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+      .split(/[_\s]+/)
+      .map((w) => w.toLowerCase())
+      .filter(Boolean);
+  }
+
+  function findViolation(name: string): string | undefined {
+    for (const word of wordsOf(name)) {
+      const abbreviation = abbreviations[word];
+      if (abbreviation) return `should abbreviate "${word}" as "${abbreviation}"`;
+    }
+    return undefined;
+  }
+
+  for (const entity of model.entities) {
+    const entityIssue = findViolation(entity.physicalName);
+    if (entityIssue) {
+      issues.push({
+        severity: "warning",
+        code: "abbreviation-suggested",
+        message: `Entity physical name "${entity.physicalName}" ${entityIssue}.`,
+        entityId: entity.id,
+      });
+    }
+    for (const attr of entity.attributes) {
+      const attrIssue = findViolation(attr.name);
+      if (attrIssue) {
+        issues.push({
+          severity: "warning",
+          code: "abbreviation-suggested",
+          message: `Attribute "${attr.name}" on entity "${entity.logicalName}" ${attrIssue}.`,
+          entityId: entity.id,
+          attributeId: attr.id,
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
+// A Domain governs the type/length/scale of every Attribute assigned to it (erwin-style
+// "typed attribute group") — flags Attributes that reference a Domain that no longer
+// exists, or whose own type/length/scale has drifted from what the Domain currently
+// specifies (e.g. someone called ChangeAttributeType directly after assigning a Domain).
+function checkDomainDrift(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const domainsById = new Map((model.domains ?? []).map((d) => [d.id, d]));
+
+  for (const entity of model.entities) {
+    for (const attr of entity.attributes) {
+      if (!attr.domainId) continue;
+      const domain = domainsById.get(attr.domainId);
+      if (!domain) {
+        issues.push({
+          severity: "error",
+          code: "domain-not-found",
+          message: `Attribute "${attr.name}" on entity "${entity.logicalName}" references missing domain "${attr.domainId}".`,
+          entityId: entity.id,
+          attributeId: attr.id,
+        });
+        continue;
+      }
+      if (
+        attr.type !== domain.type ||
+        attr.length !== domain.length ||
+        attr.scale !== domain.scale
+      ) {
+        issues.push({
+          severity: "warning",
+          code: "domain-drift",
+          message: `Attribute "${attr.name}" on entity "${entity.logicalName}" no longer matches its domain "${domain.name}" — re-sync or unassign.`,
+          entityId: entity.id,
+          attributeId: attr.id,
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
 // Identifying relationships form a parent -> child dependency: the child's primary key
 // includes the parent's. A cycle in that graph means no entity's PK could ever be
 // resolved, so it's a hard error, not just a modeling smell.
@@ -234,14 +412,23 @@ function checkCircularIdentifyingRelationships(model: Model): ValidationIssue[] 
 }
 
 // Structural invariants from /docs/schema-engine.md. Extend as new rules land.
-export function validateModel(
-  model: Model,
-  reservedWords: string[] = DEFAULT_RESERVED_WORDS,
-): ValidationIssue[] {
+//
+// `reservedWords` is an explicit override for callers that want to check against a
+// specific list regardless of the Model's own NamingRuleSet (e.g. testing the reserved-
+// word check in isolation). Omit it to check against DEFAULT_RESERVED_WORDS plus
+// whatever `model.namingRules.reservedWords` adds on top — the normal, model-aware path.
+export function validateModel(model: Model, reservedWords?: string[]): ValidationIssue[] {
+  const effectiveReservedWords = reservedWords ?? [
+    ...DEFAULT_RESERVED_WORDS,
+    ...(model.namingRules?.reservedWords ?? []),
+  ];
   return [
     ...checkStructural(model),
     ...checkDuplicateIndexes(model),
-    ...checkReservedWords(model, reservedWords),
+    ...checkReservedWords(model, effectiveReservedWords),
     ...checkCircularIdentifyingRelationships(model),
+    ...checkNamingConventions(model),
+    ...checkAbbreviations(model),
+    ...checkDomainDrift(model),
   ];
 }

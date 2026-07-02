@@ -360,4 +360,270 @@ describe("validateModel", () => {
       "circular-identifying-relationship",
     );
   });
+
+  it("merges a Model's own namingRules.reservedWords with the built-in default list", () => {
+    const model = emptyModel();
+    model.namingRules = { case: "snake", reservedWords: ["widget"], abbreviations: {} };
+    model.entities.push({
+      id: "e1",
+      logicalName: "Widget",
+      physicalName: "widget",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).toContain("reserved-word");
+  });
+
+  it("flags a physical name that violates the configured case", () => {
+    const model = emptyModel();
+    model.namingRules = { case: "snake", reservedWords: [], abbreviations: {} };
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "CustomerTable",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "customerId",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    const codes = validateModel(model).map((i) => i.code);
+    expect(codes.filter((c) => c === "naming-convention-violation")).toHaveLength(2);
+  });
+
+  it("flags a physical name missing the configured prefix/suffix", () => {
+    const model = emptyModel();
+    model.namingRules = {
+      case: "snake",
+      entityPrefix: "tbl_",
+      reservedWords: [],
+      abbreviations: {},
+    };
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).toContain("naming-convention-violation");
+  });
+
+  it("does not check naming conventions when no NamingRuleSet is configured", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "CustomerTable",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).not.toContain("naming-convention-violation");
+  });
+
+  it("suggests a configured abbreviation for a spelled-out word", () => {
+    const model = emptyModel();
+    model.namingRules = {
+      case: "snake",
+      reservedWords: [],
+      abbreviations: { identifier: "id" },
+    };
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "customer_identifier",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    const issue = validateModel(model).find((i) => i.code === "abbreviation-suggested");
+    expect(issue?.message).toContain('abbreviate "identifier" as "id"');
+  });
+
+  it("flags an attribute referencing a missing domain", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+        {
+          id: "a2",
+          name: "email",
+          logicalName: "Email",
+          type: "string",
+          nullable: false,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: false,
+          domainId: "missing-domain",
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ code: "domain-not-found", attributeId: "a2" }),
+    );
+  });
+
+  it("flags an attribute whose type has drifted from its assigned domain", () => {
+    const model = emptyModel();
+    model.domains = [{ id: "d1", name: "Email", type: "string", length: 320 }];
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+        {
+          id: "a2",
+          name: "email",
+          logicalName: "Email",
+          type: "string",
+          length: 100,
+          nullable: false,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: false,
+          domainId: "d1",
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ code: "domain-drift", attributeId: "a2" }),
+    );
+  });
+
+  it("does not flag an attribute whose type matches its assigned domain", () => {
+    const model = emptyModel();
+    model.domains = [{ id: "d1", name: "Email", type: "string", length: 320 }];
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+        {
+          id: "a2",
+          name: "email",
+          logicalName: "Email",
+          type: "string",
+          length: 320,
+          nullable: false,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: false,
+          domainId: "d1",
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).not.toContain("domain-drift");
+  });
 });

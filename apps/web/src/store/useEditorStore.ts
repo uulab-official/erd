@@ -1,11 +1,22 @@
 import { create } from "zustand";
-import type { Model } from "@modelforge/schema-engine";
+import type { DictionaryEntry, Domain, Model, NamingRuleSet } from "@modelforge/schema-engine";
 import { validateModel, type ValidationIssue } from "@modelforge/schema-engine";
 import {
+  addDictionaryEntry as addDictionaryEntryOp,
+  assignDomain as assignDomainOp,
+  createDomain as createDomainOp,
   createEntity,
+  deleteDictionaryEntry as deleteDictionaryEntryOp,
+  deleteDomainCascade,
   deleteEntityCascade,
   describeHistoryEntry,
   OperationHistory,
+  unassignDomain as unassignDomainOp,
+  updateDictionaryEntry as updateDictionaryEntryOp,
+  updateDomainCascade,
+  updateNamingRuleSet as updateNamingRuleSetOp,
+  type UpdateDictionaryEntryPayload,
+  type UpdateDomainPayload,
 } from "@modelforge/erd-engine";
 import { getModelStore } from "../lib/appwrite.js";
 
@@ -58,6 +69,16 @@ interface EditorState {
   // database now matches the current model — same baseline update as save(), just
   // triggered by "it actually ran" rather than "the JSON snapshot was written".
   markDeployed(): void;
+  // Governance (erwin-style Domain/Dictionary/Naming Rules) — see /docs/operations.md.
+  createDomain(domain: Domain): void;
+  updateDomain(domainId: string, changes: UpdateDomainPayload["changes"]): void;
+  deleteDomain(domainId: string): void;
+  assignDomain(entityId: string, attributeId: string, domainId: string): void;
+  unassignDomain(entityId: string, attributeId: string): void;
+  addDictionaryEntry(entry: DictionaryEntry): void;
+  updateDictionaryEntry(entryId: string, changes: UpdateDictionaryEntryPayload["changes"]): void;
+  deleteDictionaryEntry(entryId: string): void;
+  updateNamingRuleSet(namingRules: NamingRuleSet | undefined): void;
 }
 
 // One undo/redo stack per loaded model — reassigned on load()/newModel() so undoing
@@ -172,5 +193,67 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   markDeployed() {
     set({ savedModel: get().model });
+  },
+
+  createDomain(domain) {
+    const { model, operation } = createDomainOp(get().model, { domain }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  updateDomain(domainId, changes) {
+    const { model, transaction } = updateDomainCascade(get().model, domainId, changes, ACTOR_ID);
+    history.push(transaction);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  deleteDomain(domainId) {
+    const { model, transaction } = deleteDomainCascade(get().model, domainId, ACTOR_ID);
+    history.push(transaction);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  assignDomain(entityId, attributeId, domainId) {
+    const { model, operation } = assignDomainOp(
+      get().model,
+      { entityId, attributeId, domainId },
+      ACTOR_ID,
+    );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  unassignDomain(entityId, attributeId) {
+    const { model, operation } = unassignDomainOp(get().model, { entityId, attributeId }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  addDictionaryEntry(entry) {
+    const { model, operation } = addDictionaryEntryOp(get().model, { entry }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  updateDictionaryEntry(entryId, changes) {
+    const { model, operation } = updateDictionaryEntryOp(
+      get().model,
+      { entryId, changes },
+      ACTOR_ID,
+    );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  deleteDictionaryEntry(entryId) {
+    const { model, operation } = deleteDictionaryEntryOp(get().model, { entryId }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  updateNamingRuleSet(namingRules) {
+    const { model, operation } = updateNamingRuleSetOp(get().model, { namingRules }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
   },
 }));

@@ -132,14 +132,18 @@ export interface Model {
   views: View[];
   sequences: Sequence[];
   enums: EnumType[];
+  // Governance (erwin-style): typed attribute groups, a standard-term glossary, and
+  // naming enforcement. Optional so older persisted Models (saved before this field
+  // existed) still satisfy the type — readers should treat a missing value as "none
+  // configured" (`[]`/no rules), not as a data error.
+  domains?: Domain[];
+  dictionary?: DictionaryEntry[];
+  namingRules?: NamingRuleSet;
 }
 
 export interface Project {
   id: string;
   name: string;
   models: Model[];
-  dictionary: DictionaryEntry[];
-  domains: Domain[];
-  namingRules: NamingRuleSet;
   subjectAreas: SubjectArea[];
 }

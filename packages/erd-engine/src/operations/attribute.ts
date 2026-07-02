@@ -2,11 +2,13 @@ import type { Attribute, Entity, Model } from "@modelforge/schema-engine";
 import { buildOperation, inverseOf, type TypedOperation } from "./operation.js";
 import type {
   AddAttributePayload,
+  AssignDomainPayload,
   ChangeAttributeTypePayload,
   RemoveAttributePayload,
   RenameAttributePayload,
   SetAttributeDefaultPayload,
   SetAttributeFlagsPayload,
+  UnassignDomainPayload,
 } from "./types.js";
 
 export interface AttributeOpResult<
@@ -16,7 +18,9 @@ export interface AttributeOpResult<
     | "RenameAttribute"
     | "ChangeAttributeType"
     | "SetAttributeFlags"
-    | "SetAttributeDefault",
+    | "SetAttributeDefault"
+    | "AssignDomain"
+    | "UnassignDomain",
 > {
   model: Model;
   operation: TypedOperation<K>;
@@ -157,6 +161,93 @@ export function setAttributeFlags(
     flags: previousFlags,
   });
   const operation = buildOperation("SetAttributeFlags", model.id, payload, inverse, actorId);
+  return { model: nextModel, operation };
+}
+
+// Both assignDomain and unassignDomain invert to an UnassignDomain payload that captures
+// the attribute's exact prior domainId/type/length/scale — never to "re-assign domain X",
+// since a Domain's own fields can change (or the Domain itself be deleted) between the
+// forward call and undo. This matters most inside a Transaction like updateDomainCascade,
+// where the Domain and its assigned Attributes are reverted in the same undo pass — if the
+// Attribute's inverse re-derived values from the Domain, it would read whatever state the
+// Domain is in AT UNDO TIME, not what it was when this Operation was first applied.
+function priorDomainState(attribute: Attribute) {
+  return {
+    domainId: attribute.domainId,
+    type: attribute.type,
+    length: attribute.length,
+    scale: attribute.scale,
+  };
+}
+
+// Assigning a Domain immediately syncs the Attribute's type/length/scale to match it
+// (erwin-style "typed attribute group") — they stay linked until explicitly unassigned or
+// until ChangeAttributeType is called directly, which schema-engine's validateModel flags
+// as "domain-drift" rather than this Operation silently re-syncing on every read.
+export function assignDomain(
+  model: Model,
+  payload: AssignDomainPayload,
+  actorId: string,
+): AttributeOpResult<"AssignDomain"> {
+  const entity = requireEntity(model, payload.entityId);
+  const attribute = requireAttribute(entity, payload.attributeId);
+  const domain = (model.domains ?? []).find((d) => d.id === payload.domainId);
+  if (!domain) throw new Error(`Domain "${payload.domainId}" not found`);
+
+  const nextModel = updateEntityAttributes(model, entity.id, (attrs) =>
+    attrs.map((a) =>
+      a.id === attribute.id
+        ? {
+            ...a,
+            domainId: domain.id,
+            type: domain.type,
+            length: domain.length,
+            scale: domain.scale,
+          }
+        : a,
+    ),
+  );
+  const inverse = inverseOf("UnassignDomain", {
+    entityId: entity.id,
+    attributeId: attribute.id,
+    ...priorDomainState(attribute),
+  });
+  const operation = buildOperation("AssignDomain", model.id, payload, inverse, actorId);
+  return { model: nextModel, operation };
+}
+
+// A plain user-triggered unassign passes no domainId/type override — it just clears
+// domainId and leaves type/length/scale exactly as they are. `domainId`/`type`/`length`/
+// `scale` on the payload otherwise exist purely so this Operation can also serve as the
+// inverse of AssignDomain (or of itself), restoring an attribute's exact prior domain
+// state rather than truly detaching it.
+export function unassignDomain(
+  model: Model,
+  payload: UnassignDomainPayload,
+  actorId: string,
+): AttributeOpResult<"UnassignDomain"> {
+  const entity = requireEntity(model, payload.entityId);
+  const attribute = requireAttribute(entity, payload.attributeId);
+
+  const nextModel = updateEntityAttributes(model, entity.id, (attrs) =>
+    attrs.map((a) =>
+      a.id === attribute.id
+        ? {
+            ...a,
+            domainId: payload.domainId,
+            type: payload.type ?? a.type,
+            length: payload.type !== undefined ? payload.length : a.length,
+            scale: payload.type !== undefined ? payload.scale : a.scale,
+          }
+        : a,
+    ),
+  );
+  const inverse = inverseOf("UnassignDomain", {
+    entityId: entity.id,
+    attributeId: attribute.id,
+    ...priorDomainState(attribute),
+  });
+  const operation = buildOperation("UnassignDomain", model.id, payload, inverse, actorId);
   return { model: nextModel, operation };
 }
 

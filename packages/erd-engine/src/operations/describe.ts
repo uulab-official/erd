@@ -14,10 +14,19 @@ const LABELS: Record<OperationType, string> = {
   ChangeAttributeType: "Change attribute type",
   SetAttributeFlags: "Update attribute flags",
   SetAttributeDefault: "Set attribute default",
+  AssignDomain: "Assign domain",
+  UnassignDomain: "Unassign domain",
   CreateRelationship: "Create relationship",
   DeleteRelationship: "Delete relationship",
   ChangeRelationshipCardinality: "Change relationship cardinality",
   ChangeRelationshipKind: "Change relationship kind",
+  CreateDomain: "Create domain",
+  UpdateDomain: "Update domain",
+  DeleteDomain: "Delete domain",
+  AddDictionaryEntry: "Add dictionary entry",
+  UpdateDictionaryEntry: "Update dictionary entry",
+  DeleteDictionaryEntry: "Delete dictionary entry",
+  UpdateNamingRuleSet: "Update naming rules",
 };
 
 // Human-readable label for a History Panel entry. Transactions already carry their own

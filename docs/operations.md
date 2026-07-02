@@ -44,7 +44,7 @@ interface OperationResult {
 - `ChangeAttributeType` (type/length/scale)
 - `SetAttributeFlags` (nullable/isPrimaryKey/isForeignKey/isUnique)
 - `SetAttributeDefault`
-- `AssignDomain` / `UnassignDomain`
+- `AssignDomain` / `UnassignDomain` — 구현: `packages/erd-engine/src/operations/attribute.ts`. 둘 다 inverse를 항상 `UnassignDomain`(대상 Attribute의 정확한 이전 `domainId`/`type`/`length`/`scale`을 담은)으로 만든다 — inverse가 "그 Domain으로 다시 assign"이라면, Domain 자체가 그 사이에 바뀌거나 삭제된 케이스(예: `updateDomainCascade`/`deleteDomainCascade` 안에서 같은 Transaction으로 함께 undo될 때)에 Undo 시점의 Domain 상태를 잘못 읽어올 수 있기 때문.
 
 ### Relationship
 

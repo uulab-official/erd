@@ -2,6 +2,7 @@ import type { Model } from "@modelforge/schema-engine";
 import type { Operation } from "@modelforge/sdk";
 import * as attributeOps from "./attribute.js";
 import * as entityOps from "./entity.js";
+import * as governanceOps from "./governance.js";
 import * as relationshipOps from "./relationship.js";
 import type { OperationPayloadMap, OperationType } from "./types.js";
 
@@ -83,6 +84,18 @@ export function applyOperation(model: Model, op: DispatchableOperation): Model {
         op.payload as OperationPayloadMap["SetAttributeDefault"],
         REPLAY_ACTOR,
       ).model;
+    case "AssignDomain":
+      return attributeOps.assignDomain(
+        model,
+        op.payload as OperationPayloadMap["AssignDomain"],
+        REPLAY_ACTOR,
+      ).model;
+    case "UnassignDomain":
+      return attributeOps.unassignDomain(
+        model,
+        op.payload as OperationPayloadMap["UnassignDomain"],
+        REPLAY_ACTOR,
+      ).model;
     case "CreateRelationship": {
       const payload = op.payload as OperationPayloadMap["CreateRelationship"];
       return relationshipOps.createRelationship(
@@ -108,6 +121,48 @@ export function applyOperation(model: Model, op: DispatchableOperation): Model {
       return relationshipOps.changeRelationshipKind(
         model,
         op.payload as OperationPayloadMap["ChangeRelationshipKind"],
+        REPLAY_ACTOR,
+      ).model;
+    case "CreateDomain":
+      return governanceOps.createDomain(
+        model,
+        op.payload as OperationPayloadMap["CreateDomain"],
+        REPLAY_ACTOR,
+      ).model;
+    case "UpdateDomain":
+      return governanceOps.updateDomain(
+        model,
+        op.payload as OperationPayloadMap["UpdateDomain"],
+        REPLAY_ACTOR,
+      ).model;
+    case "DeleteDomain":
+      return governanceOps.deleteDomain(
+        model,
+        op.payload as OperationPayloadMap["DeleteDomain"],
+        REPLAY_ACTOR,
+      ).model;
+    case "AddDictionaryEntry":
+      return governanceOps.addDictionaryEntry(
+        model,
+        op.payload as OperationPayloadMap["AddDictionaryEntry"],
+        REPLAY_ACTOR,
+      ).model;
+    case "UpdateDictionaryEntry":
+      return governanceOps.updateDictionaryEntry(
+        model,
+        op.payload as OperationPayloadMap["UpdateDictionaryEntry"],
+        REPLAY_ACTOR,
+      ).model;
+    case "DeleteDictionaryEntry":
+      return governanceOps.deleteDictionaryEntry(
+        model,
+        op.payload as OperationPayloadMap["DeleteDictionaryEntry"],
+        REPLAY_ACTOR,
+      ).model;
+    case "UpdateNamingRuleSet":
+      return governanceOps.updateNamingRuleSet(
+        model,
+        op.payload as OperationPayloadMap["UpdateNamingRuleSet"],
         REPLAY_ACTOR,
       ).model;
     default: {

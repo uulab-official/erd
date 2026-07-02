@@ -1,5 +1,13 @@
 // Payload shapes for the Phase 1 Operation set. See /docs/operations.md.
-import type { Attribute, ColumnType, Entity, Relationship } from "@modelforge/schema-engine";
+import type {
+  Attribute,
+  ColumnType,
+  DictionaryEntry,
+  Domain,
+  Entity,
+  NamingRuleSet,
+  Relationship,
+} from "@modelforge/schema-engine";
 
 export interface CreateEntityPayload {
   entity: Entity;
@@ -56,6 +64,25 @@ export interface SetAttributeDefaultPayload {
   default: Attribute["default"];
 }
 
+export interface AssignDomainPayload {
+  entityId: string;
+  attributeId: string;
+  domainId: string;
+}
+export interface UnassignDomainPayload {
+  entityId: string;
+  attributeId: string;
+  // Only set when this payload is restoring a prior domain link (as the inverse of
+  // AssignDomain/UnassignDomain) rather than performing a real user-triggered unassign.
+  domainId?: string;
+  // Only set alongside `domainId` above, to restore the attribute's exact prior
+  // type/length/scale. A user-triggered unassign omits these and just clears domainId,
+  // leaving the attribute's current type/length/scale untouched.
+  type?: ColumnType;
+  length?: number;
+  scale?: number;
+}
+
 export interface CreateRelationshipPayload {
   relationship: Relationship;
   index?: number;
@@ -72,6 +99,37 @@ export interface ChangeRelationshipKindPayload {
   kind: Relationship["kind"];
 }
 
+export interface CreateDomainPayload {
+  domain: Domain;
+}
+export interface UpdateDomainPayload {
+  domainId: string;
+  changes: Partial<
+    Pick<Domain, "name" | "type" | "length" | "scale" | "defaultValidation" | "description">
+  >;
+}
+export interface DeleteDomainPayload {
+  domainId: string;
+}
+
+export interface AddDictionaryEntryPayload {
+  entry: DictionaryEntry;
+}
+export interface UpdateDictionaryEntryPayload {
+  entryId: string;
+  changes: Partial<
+    Pick<DictionaryEntry, "logicalTerm" | "standardName" | "abbreviation" | "domainId">
+  >;
+}
+export interface DeleteDictionaryEntryPayload {
+  entryId: string;
+}
+
+export interface UpdateNamingRuleSetPayload {
+  // Undefined clears the Model's NamingRuleSet entirely (back to "no rules configured").
+  namingRules: NamingRuleSet | undefined;
+}
+
 export interface OperationPayloadMap {
   CreateEntity: CreateEntityPayload;
   DeleteEntity: DeleteEntityPayload;
@@ -84,10 +142,19 @@ export interface OperationPayloadMap {
   ChangeAttributeType: ChangeAttributeTypePayload;
   SetAttributeFlags: SetAttributeFlagsPayload;
   SetAttributeDefault: SetAttributeDefaultPayload;
+  AssignDomain: AssignDomainPayload;
+  UnassignDomain: UnassignDomainPayload;
   CreateRelationship: CreateRelationshipPayload;
   DeleteRelationship: DeleteRelationshipPayload;
   ChangeRelationshipCardinality: ChangeRelationshipCardinalityPayload;
   ChangeRelationshipKind: ChangeRelationshipKindPayload;
+  CreateDomain: CreateDomainPayload;
+  UpdateDomain: UpdateDomainPayload;
+  DeleteDomain: DeleteDomainPayload;
+  AddDictionaryEntry: AddDictionaryEntryPayload;
+  UpdateDictionaryEntry: UpdateDictionaryEntryPayload;
+  DeleteDictionaryEntry: DeleteDictionaryEntryPayload;
+  UpdateNamingRuleSet: UpdateNamingRuleSetPayload;
 }
 
 export type OperationType = keyof OperationPayloadMap;

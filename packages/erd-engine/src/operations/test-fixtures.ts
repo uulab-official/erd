@@ -10,6 +10,8 @@ export function emptyModel(): Model {
     views: [],
     sequences: [],
     enums: [],
+    domains: [],
+    dictionary: [],
   };
 }
 

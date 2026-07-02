@@ -19,6 +19,7 @@ export * from "./operations/operation.js";
 export * from "./operations/entity.js";
 export * from "./operations/attribute.js";
 export * from "./operations/relationship.js";
+export * from "./operations/governance.js";
 export * from "./operations/apply.js";
 export * from "./operations/transaction.js";
 export * from "./operations/history.js";
