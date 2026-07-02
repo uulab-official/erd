@@ -50,7 +50,7 @@ interface EditorState {
   jumpToHistory(index: number): void;
   save(): Promise<void>;
   load(modelId: string): Promise<void>;
-  newProject(id: string, name: string): void;
+  newModel(id: string, name: string): void;
   // Replaces the live model wholesale — used after parsing an imported schema (e.g. an
   // Appwrite CLI appwrite.json export) into a Model via an Adapter's fromNativeSchema.
   importModel(model: Model): void;
@@ -60,8 +60,8 @@ interface EditorState {
   markDeployed(): void;
 }
 
-// One undo/redo stack per loaded model — reassigned on load()/newProject() so undoing
-// never crosses between unrelated projects.
+// One undo/redo stack per loaded model — reassigned on load()/newModel() so undoing
+// never crosses between unrelated models.
 let history = new OperationHistory();
 
 function historyFlags() {
@@ -72,7 +72,7 @@ function historyFlags() {
   };
 }
 
-const initialModel = emptyModel("default", "Untitled Project");
+const initialModel = emptyModel("default", "Untitled Model");
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   model: initialModel,
@@ -159,7 +159,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
   },
 
-  newProject(id, name) {
+  newModel(id, name) {
     const model = emptyModel(id, name);
     history = new OperationHistory();
     set({ model, savedModel: model, issues: [], ...historyFlags() });

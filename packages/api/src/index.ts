@@ -13,12 +13,35 @@ export type { Models } from "appwrite";
 // In-memory store used for local dev/tests without an Appwrite project configured.
 export function createInMemoryModelStore(): ModelStore {
   const models = new Map<string, Model>();
+  const updatedAt = new Map<string, string>();
+  // wall-clock timestamps only have millisecond resolution, which two saves in the same
+  // tick (e.g. back-to-back in a test) can tie on — a separate monotonic counter keeps
+  // list() ordering deterministic (most-recently-saved first) regardless of clock ties.
+  let sequence = 0;
+  const savedAtSequence = new Map<string, number>();
+
   return {
     async save(model) {
       models.set(model.id, model);
+      updatedAt.set(model.id, new Date().toISOString());
+      savedAtSequence.set(model.id, ++sequence);
     },
     async load(modelId) {
       return models.get(modelId) ?? null;
+    },
+    async list() {
+      return [...models.values()]
+        .map((model) => ({
+          id: model.id,
+          name: model.name,
+          updatedAt: updatedAt.get(model.id) ?? new Date(0).toISOString(),
+        }))
+        .sort((a, b) => (savedAtSequence.get(b.id) ?? 0) - (savedAtSequence.get(a.id) ?? 0));
+    },
+    async remove(modelId) {
+      models.delete(modelId);
+      updatedAt.delete(modelId);
+      savedAtSequence.delete(modelId);
     },
   };
 }

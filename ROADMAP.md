@@ -13,7 +13,7 @@ Phase 구분은 [ARCHITECTURE.md#mvp-우선순위](ARCHITECTURE.md#mvp-우선순
 - [x] Appwrite Import — `appwrite.json`(Appwrite CLI export) 파일을 파싱해 Model로 가져오기, `$id` 암묵적 PK 합성 — [PR #9](https://github.com/uulab-official/erd/pull/9)
 - [x] Appwrite 실시간(live) Collection Import — `functions/deploy-appwrite`에 `{ action: "list" }` 요청을 추가, 실제 배포된 Collection(속성/인덱스 포함, 25개 단위 커서 페이지네이션)을 읽어 `appwrite.json`과 동일한 wire 포맷으로 반환하고 기존 `parseAppwriteJson`/`fromNativeSchema`를 그대로 재사용. Toolbar의 "Import Live" 버튼(`canDeploy`가 true일 때만 노출, 같은 Function id 재사용) — [PR #15](https://github.com/uulab-official/erd/pull/15)
 - [x] Appwrite Deploy 실행 — `functions/deploy-appwrite`(Appwrite Function, `node-appwrite`)가 `AppwriteAdminAPI`를 실제 구현. `apps/web`은 `Functions.createExecution()`으로 트리거만 하고, 실제 Databases 관리자 호출은 전부 Function 안에서 실행됨(동적 `APPWRITE_FUNCTION_API_KEY` 사용) — [PR #14](https://github.com/uulab-official/erd/pull/14)
-- [ ] "프로젝트" 개념 (현재는 단일 Model만 로드/저장. Project → 여러 Model, Dashboard, 즐겨찾기/최근 프로젝트 목록 필요)
+- [x] "프로젝트" 개념 (다중 Model + Dashboard + 즐겨찾기/최근 목록) — `ModelStore`에 `list()`/`remove()` 추가, `apps/web`의 `Dashboard` 컴포넌트가 랜딩 화면이 되어 Model 생성/열기/삭제, Toolbar의 "← Models" 버튼으로 되돌아옴. "최근"은 Appwrite `listDocuments`의 `$updatedAt` 내림차순(서버 데이터)으로, "즐겨찾기"는 로컬 `localStorage`(기기별 UI 취향, 서버 스키마 변경 불필요)로 구현 — [PR #16](https://github.com/uulab-official/erd/pull/16). `Project`(dictionary/domains/namingRules/subjectAreas를 포함하는 전체 컨테이너, `packages/schema-engine`의 `Project` 타입)는 여전히 미구현 — 그건 Phase 2의 Dictionary/Domain/Naming Rules가 각각 구현된 뒤에야 의미가 있는 상위 컨테이너라 이번 스코프에서는 제외.
 
 ## Phase 2
 
@@ -53,3 +53,5 @@ Phase 구분은 [ARCHITECTURE.md#mvp-우선순위](ARCHITECTURE.md#mvp-우선순
 - `createPostgreSQLAdapter`의 `apply()`도 Appwrite와 동일한 이유로 브라우저에서 직접 실행하지 않는다 — 실제 Postgres 연결(`pg` 등)이 필요한 서버사이드 `SqlExecutor` 구현체를 주입받는 구조다. 현재 apps/web에는 SQL Export만 연결되어 있고 Deploy Plan/apply UI는 Appwrite 전용이다.
 - `functions/deploy-appwrite`는 pnpm workspace 멤버가 **아니다** — Appwrite 빌드 컨테이너가 이 폴더만 떼어내 `npm install`을 돌리기 때문에 `workspace:*` 의존성을 해석할 수 없다. `src/types.ts`에 `packages/sdk`/`packages/deploy-engine`의 관련 타입을 손으로 복사해 동기화한다 (주석에 명시).
 - 이 Function은 정적 API 키가 아니라 Appwrite가 실행마다 주입하는 동적 `APPWRITE_FUNCTION_API_KEY`를 사용한다 (Function의 Execute/Scopes 설정에 따라 스코프가 제한됨). 대화 중 공유된 정적 API 키는 `apps/web/.env.local`의 `APPWRITE_API_KEY`에 보관용으로만 있고 어떤 코드도 읽지 않는다 — 채팅에 노출된 적이 있다면 Console에서 재발급 권장.
+- `modelsTableId` 컬렉션에 `name`(string) attribute를 추가해두면 Dashboard의 `list()`가 각 Model의 전체 `data` JSON을 파싱하지 않고도 이름을 보여줄 수 있다 — 필수는 아니다(그 attribute가 없는 기존 row는 `data`를 파싱해 이름을 채우는 fallback이 `packages/api`의 `createAppwriteModelStore`에 있음), 있으면 더 가볍다.
+- Model 목록에 사용자별 소유권/권한 분리(현재는 프로젝트 내 모든 Model이 공유되어 보임)는 아직 없다 — 이 앱의 다른 어떤 기능(Import/Deploy 등)도 아직 사용자별로 스코프되어 있지 않아서, 이번 Dashboard도 기존 보안 모델을 그대로 따른다. 실제 멀티테넌시가 필요해지면 Appwrite의 document-level permission(`Permission.read(Role.user(...))`)을 도입해야 한다.

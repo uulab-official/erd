@@ -31,11 +31,15 @@ class FakeAccount {
 const updateDocument = vi.fn();
 const createDocument = vi.fn();
 const getDocument = vi.fn();
+const listDocuments = vi.fn();
+const deleteDocument = vi.fn();
 
 class FakeDatabases {
   updateDocument = updateDocument;
   createDocument = createDocument;
   getDocument = getDocument;
+  listDocuments = listDocuments;
+  deleteDocument = deleteDocument;
 }
 
 const createExecution = vi.fn();
@@ -51,6 +55,7 @@ vi.mock("appwrite", () => ({
   Functions: FakeFunctions,
   AppwriteException: FakeAppwriteException,
   ID: { unique: () => "generated-id" },
+  Query: { orderDesc: (attr: string) => `orderDesc(${attr})`, limit: (n: number) => `limit(${n})` },
 }));
 
 const { createAppwriteClient, pingAppwrite } = await import("./client.js");
@@ -115,6 +120,7 @@ describe("createAppwriteModelStore", () => {
     await store.save(model);
     expect(createDocument).toHaveBeenCalledWith("db-1", "models", "m1", {
       data: JSON.stringify(model),
+      name: "Shop",
     });
   });
 
@@ -135,6 +141,47 @@ describe("createAppwriteModelStore", () => {
     getDocument.mockResolvedValueOnce({ data: JSON.stringify(model) });
     const store = createAppwriteModelStore(new FakeClient() as never, config);
     expect(await store.load("m1")).toEqual(model);
+  });
+
+  it("lists documents as summaries, ordered by most-recently updated", async () => {
+    listDocuments.mockResolvedValueOnce({
+      documents: [
+        { $id: "m1", name: "Shop", $updatedAt: "2026-01-02T00:00:00.000Z" },
+        { $id: "m2", name: "Blog", $updatedAt: "2026-01-01T00:00:00.000Z" },
+      ],
+    });
+    const store = createAppwriteModelStore(new FakeClient() as never, config);
+    const result = await store.list();
+    expect(listDocuments).toHaveBeenCalledWith("db-1", "models", [
+      "orderDesc($updatedAt)",
+      "limit(100)",
+    ]);
+    expect(result).toEqual([
+      { id: "m1", name: "Shop", updatedAt: "2026-01-02T00:00:00.000Z" },
+      { id: "m2", name: "Blog", updatedAt: "2026-01-01T00:00:00.000Z" },
+    ]);
+  });
+
+  it("falls back to parsing data.name for older rows saved before the name attribute existed", async () => {
+    listDocuments.mockResolvedValueOnce({
+      documents: [
+        { $id: "m1", data: JSON.stringify(model), $updatedAt: "2026-01-02T00:00:00.000Z" },
+      ],
+    });
+    const store = createAppwriteModelStore(new FakeClient() as never, config);
+    expect(await store.list()).toEqual([
+      { id: "m1", name: "Shop", updatedAt: "2026-01-02T00:00:00.000Z" },
+    ]);
+  });
+
+  it("removes a document, tolerating one that's already gone", async () => {
+    deleteDocument.mockResolvedValueOnce({});
+    const store = createAppwriteModelStore(new FakeClient() as never, config);
+    await store.remove("m1");
+    expect(deleteDocument).toHaveBeenCalledWith("db-1", "models", "m1");
+
+    deleteDocument.mockRejectedValueOnce(new FakeAppwriteException("not found", 404));
+    await expect(store.remove("missing")).resolves.toBeUndefined();
   });
 });
 

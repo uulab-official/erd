@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Button } from "@modelforge/ui";
 import { useEditorStore } from "../store/useEditorStore.js";
 import { useAuthStore } from "../store/useAuthStore.js";
+import { useNavigationStore } from "../store/useNavigationStore.js";
 import { downloadExport, exporters } from "../lib/exporters.js";
 import { downloadGenerated, generators } from "../lib/generators.js";
 import { importAppwriteJsonFile } from "../lib/importAppwrite.js";
@@ -17,6 +18,17 @@ export function Toolbar() {
   const { model, canUndo, canRedo, saving, addEntity, undo, redo, save, importModel } =
     useEditorStore();
   const { user, logout } = useAuthStore();
+  const closeModel = useNavigationStore((state) => state.closeModel);
+
+  function handleBackToModels() {
+    if (
+      window.confirm(
+        "Back to your models list? Any unsaved changes to this model will be lost unless you've saved.",
+      )
+    ) {
+      closeModel();
+    }
+  }
 
   function handleAddEntity() {
     if (!entityName.trim()) return;
@@ -80,6 +92,9 @@ export function Toolbar() {
   return (
     <header className="flex items-center gap-2 border-b border-neutral-200 px-4 py-2">
       <h1 className="mr-2 text-lg font-semibold">ModelForge</h1>
+      <Button variant="ghost" onClick={handleBackToModels}>
+        ← Models
+      </Button>
       <span className="mr-4 text-sm text-neutral-500">{model.name}</span>
 
       <input
