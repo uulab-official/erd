@@ -3,11 +3,13 @@ import { Button } from "@modelforge/ui";
 import { useEditorStore } from "../store/useEditorStore.js";
 import { useAuthStore } from "../store/useAuthStore.js";
 import { downloadExport, exporters } from "../lib/exporters.js";
+import { downloadGenerated, generators } from "../lib/generators.js";
 import { importAppwriteJsonFile } from "../lib/importAppwrite.js";
 
 export function Toolbar() {
   const [entityName, setEntityName] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { model, canUndo, canRedo, saving, addEntity, undo, redo, save, importModel } =
@@ -28,6 +30,17 @@ export function Toolbar() {
       await downloadExport(exporter, model);
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleGenerate(generatorId: string) {
+    const generator = generators.find((g) => g.id === generatorId);
+    if (!generator) return;
+    setGenerating(true);
+    try {
+      await downloadGenerated(generator, model);
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -97,6 +110,22 @@ export function Toolbar() {
           {exporters.map((exporter) => (
             <option key={exporter.id} value={exporter.id}>
               {exporter.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+          disabled={generating}
+          value=""
+          onChange={(e) => e.target.value && void handleGenerate(e.target.value)}
+        >
+          <option value="" disabled>
+            {generating ? "Generating…" : "Generate…"}
+          </option>
+          {generators.map((generator) => (
+            <option key={generator.id} value={generator.id}>
+              {generator.label}
             </option>
           ))}
         </select>
