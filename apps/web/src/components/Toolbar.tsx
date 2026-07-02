@@ -1,13 +1,17 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@modelforge/ui";
 import { useEditorStore } from "../store/useEditorStore.js";
 import { useAuthStore } from "../store/useAuthStore.js";
 import { downloadExport, exporters } from "../lib/exporters.js";
+import { importAppwriteJsonFile } from "../lib/importAppwrite.js";
 
 export function Toolbar() {
   const [entityName, setEntityName] = useState("");
   const [exporting, setExporting] = useState(false);
-  const { model, canUndo, canRedo, saving, addEntity, undo, redo, save } = useEditorStore();
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { model, canUndo, canRedo, saving, addEntity, undo, redo, save, importModel } =
+    useEditorStore();
   const { user, logout } = useAuthStore();
 
   function handleAddEntity() {
@@ -24,6 +28,17 @@ export function Toolbar() {
       await downloadExport(exporter, model);
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleImportFile(file: File | undefined) {
+    if (!file) return;
+    setImportError(null);
+    try {
+      const imported = await importAppwriteJsonFile(file);
+      importModel(imported);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -49,6 +64,25 @@ export function Toolbar() {
       <Button variant="ghost" onClick={redo} disabled={!canRedo}>
         Redo
       </Button>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json"
+        className="hidden"
+        onChange={(e) => {
+          void handleImportFile(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <Button variant="ghost" onClick={() => fileInputRef.current?.click()}>
+        Import
+      </Button>
+      {importError && (
+        <span className="max-w-xs truncate text-sm text-red-600" title={importError}>
+          {importError}
+        </span>
+      )}
 
       <div className="ml-auto flex items-center gap-2">
         <select

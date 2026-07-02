@@ -51,6 +51,9 @@ interface EditorState {
   save(): Promise<void>;
   load(modelId: string): Promise<void>;
   newProject(id: string, name: string): void;
+  // Replaces the live model wholesale — used after parsing an imported schema (e.g. an
+  // Appwrite CLI appwrite.json export) into a Model via an Adapter's fromNativeSchema.
+  importModel(model: Model): void;
 }
 
 // One undo/redo stack per loaded model — reassigned on load()/newProject() so undoing
@@ -156,5 +159,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const model = emptyModel(id, name);
     history = new OperationHistory();
     set({ model, savedModel: model, issues: [], ...historyFlags() });
+  },
+
+  importModel(model) {
+    history = new OperationHistory();
+    set({ model, savedModel: model, issues: validateModel(model), ...historyFlags() });
   },
 }));

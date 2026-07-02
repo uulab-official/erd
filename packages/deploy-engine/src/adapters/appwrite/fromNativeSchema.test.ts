@@ -22,6 +22,41 @@ describe("fromNativeSchema", () => {
     const schema = toNativeSchema(shopModel());
     const model = fromNativeSchema(schema);
     const customer = model.entities.find((e) => e.id === "customer");
-    expect(customer?.attributes.map((a) => a.id)).toEqual(["id", "email"]);
+    expect(customer?.attributes.map((a) => a.name)).toEqual(["id", "email"]);
+  });
+
+  it("synthesizes an implicit $id primary key when the export has none", () => {
+    const model = fromNativeSchema({
+      collections: [
+        {
+          id: "widget",
+          name: "Widget",
+          attributes: [{ key: "title", type: "string", required: true, array: false, size: 100 }],
+          indexes: [],
+        },
+      ],
+    });
+    const widget = model.entities[0]!;
+    expect(widget.attributes.map((a) => a.name)).toEqual(["id", "title"]);
+    expect(widget.attributes[0]).toMatchObject({ isPrimaryKey: true, isUnique: true });
+  });
+
+  it("does not add a synthetic id when the export already has an 'id' attribute", () => {
+    const model = fromNativeSchema({
+      collections: [
+        {
+          id: "widget",
+          name: "Widget",
+          attributes: [
+            { key: "id", type: "string", required: true, array: false, size: 36 },
+            { key: "title", type: "string", required: true, array: false, size: 100 },
+          ],
+          indexes: [],
+        },
+      ],
+    });
+    const widget = model.entities[0]!;
+    expect(widget.attributes).toHaveLength(2);
+    expect(widget.attributes[0]?.isPrimaryKey).toBe(false);
   });
 });
