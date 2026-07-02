@@ -54,6 +54,10 @@ interface EditorState {
   // Replaces the live model wholesale — used after parsing an imported schema (e.g. an
   // Appwrite CLI appwrite.json export) into a Model via an Adapter's fromNativeSchema.
   importModel(model: Model): void;
+  // Call after a successful deployPlan() so Diff/Deploy Plan reflect that the live
+  // database now matches the current model — same baseline update as save(), just
+  // triggered by "it actually ran" rather than "the JSON snapshot was written".
+  markDeployed(): void;
 }
 
 // One undo/redo stack per loaded model — reassigned on load()/newProject() so undoing
@@ -164,5 +168,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   importModel(model) {
     history = new OperationHistory();
     set({ model, savedModel: model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  markDeployed() {
+    set({ savedModel: get().model });
   },
 }));

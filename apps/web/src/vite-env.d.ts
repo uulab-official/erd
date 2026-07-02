@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_APPWRITE_PROJECT_ID?: string;
   readonly VITE_APPWRITE_DATABASE_ID?: string;
   readonly VITE_APPWRITE_MODELS_TABLE_ID?: string;
+  readonly VITE_APPWRITE_DEPLOY_FUNCTION_ID?: string;
 }
 
 interface ImportMeta {

@@ -26,3 +26,25 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  deploy-function:
+    runs-on: ubuntu-latest
+    # functions/deploy-appwrite is deliberately not a pnpm workspace member — it's
+    # deployed by Appwrite's own build container via a plain `npm install`, which can't
+    # resolve `workspace:*` deps. Verify it independently with its own npm lockfile.
+    defaults:
+      run:
+        working-directory: functions/deploy-appwrite
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/deploy-appwrite/package-lock.json
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

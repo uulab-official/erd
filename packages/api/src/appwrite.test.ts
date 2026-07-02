@@ -38,10 +38,17 @@ class FakeDatabases {
   getDocument = getDocument;
 }
 
+const createExecution = vi.fn();
+
+class FakeFunctions {
+  createExecution = createExecution;
+}
+
 vi.mock("appwrite", () => ({
   Client: FakeClient,
   Account: FakeAccount,
   Databases: FakeDatabases,
+  Functions: FakeFunctions,
   AppwriteException: FakeAppwriteException,
   ID: { unique: () => "generated-id" },
 }));
@@ -49,6 +56,7 @@ vi.mock("appwrite", () => ({
 const { createAppwriteClient, pingAppwrite } = await import("./client.js");
 const { createAuthService } = await import("./auth.js");
 const { createAppwriteModelStore } = await import("./modelStore.js");
+const { invokeDeployFunction } = await import("./functions.js");
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -127,5 +135,40 @@ describe("createAppwriteModelStore", () => {
     getDocument.mockResolvedValueOnce({ data: JSON.stringify(model) });
     const store = createAppwriteModelStore(new FakeClient() as never, config);
     expect(await store.load("m1")).toEqual(model);
+  });
+});
+
+describe("invokeDeployFunction", () => {
+  const plan = { id: "plan-1", adapterKind: "appwrite" as const, steps: [] };
+
+  it("triggers a synchronous execution and parses the DeployResult", async () => {
+    const deployResult = { planId: "plan-1", appliedSteps: ["customer"] };
+    createExecution.mockResolvedValueOnce({
+      responseStatusCode: 200,
+      responseBody: JSON.stringify(deployResult),
+    });
+
+    const result = await invokeDeployFunction(new FakeClient() as never, "fn-1", {
+      databaseId: "db-1",
+      plan,
+    });
+
+    expect(createExecution).toHaveBeenCalledWith(
+      "fn-1",
+      JSON.stringify({ databaseId: "db-1", plan }),
+      false,
+    );
+    expect(result).toEqual(deployResult);
+  });
+
+  it("throws when the Function returns an error status", async () => {
+    createExecution.mockResolvedValueOnce({
+      responseStatusCode: 500,
+      responseBody: '{"error":"boom"}',
+    });
+
+    await expect(
+      invokeDeployFunction(new FakeClient() as never, "fn-1", { databaseId: "db-1", plan }),
+    ).rejects.toThrow(/500/);
   });
 });

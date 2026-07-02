@@ -12,7 +12,7 @@ Phase 구분은 [ARCHITECTURE.md#mvp-우선순위](ARCHITECTURE.md#mvp-우선순
 - [x] Export: SVG / PNG / PDF / Markdown / JSON — [PR #5](https://github.com/uulab-official/erd/pull/5)
 - [x] Appwrite Import — `appwrite.json`(Appwrite CLI export) 파일을 파싱해 Model로 가져오기, `$id` 암묵적 PK 합성 — [PR #9](https://github.com/uulab-official/erd/pull/9)
 - [ ] Appwrite 실시간(live) Collection Import — 위는 정적 `appwrite.json` 파일 기반이고, Databases API로 실제 배포된 Collection을 직접 읽어오는 것은 여전히 서버사이드 admin 연결이 필요함 (아래 "진행 중 알아두면 좋은 것" 참고)
-- [ ] Appwrite Deploy 실행 (현재는 Plan 미리보기만 UI에 있음 — `apply()`는 서버사이드 `AppwriteAdminAPI` 구현체가 필요, Appwrite Function으로 별도 구현 예정)
+- [x] Appwrite Deploy 실행 — `functions/deploy-appwrite`(Appwrite Function, `node-appwrite`)가 `AppwriteAdminAPI`를 실제 구현. `apps/web`은 `Functions.createExecution()`으로 트리거만 하고, 실제 Databases 관리자 호출은 전부 Function 안에서 실행됨(동적 `APPWRITE_FUNCTION_API_KEY` 사용) — [PR #14](https://github.com/uulab-official/erd/pull/14)
 - [ ] "프로젝트" 개념 (현재는 단일 Model만 로드/저장. Project → 여러 Model, Dashboard, 즐겨찾기/최근 프로젝트 목록 필요)
 
 ## Phase 2
@@ -50,3 +50,5 @@ Phase 구분은 [ARCHITECTURE.md#mvp-우선순위](ARCHITECTURE.md#mvp-우선순
 - Appwrite `apply()`(실제 배포 실행)와 실시간 Collection 목록 조회는 의도적으로 브라우저에서 직접 호출하지 않는다 — API 키가 필요한 관리자 작업이라 서버(Appwrite Function, `node-appwrite`)에서 실행해야 한다. 이 함수를 만드는 것이 Phase 1 잔여 항목("실시간 Collection Import", "Deploy 실행")의 선결 조건이다. 정적 `appwrite.json` 기반 Import는 이 제약 없이 이미 동작한다.
 - Appwrite Import는 컬렉션마다 암묵적 `$id` 기반 PK 속성을 합성한다(`packages/deploy-engine`의 `fromNativeSchema`) — Appwrite의 Attributes API/`appwrite.json`은 시스템 필드인 `$id`를 커스텀 attribute 목록에 포함하지 않기 때문. 이미 `id`라는 이름의 커스텀 attribute가 있으면 합성하지 않는다(이름 충돌 방지).
 - `createPostgreSQLAdapter`의 `apply()`도 Appwrite와 동일한 이유로 브라우저에서 직접 실행하지 않는다 — 실제 Postgres 연결(`pg` 등)이 필요한 서버사이드 `SqlExecutor` 구현체를 주입받는 구조다. 현재 apps/web에는 SQL Export만 연결되어 있고 Deploy Plan/apply UI는 Appwrite 전용이다.
+- `functions/deploy-appwrite`는 pnpm workspace 멤버가 **아니다** — Appwrite 빌드 컨테이너가 이 폴더만 떼어내 `npm install`을 돌리기 때문에 `workspace:*` 의존성을 해석할 수 없다. `src/types.ts`에 `packages/sdk`/`packages/deploy-engine`의 관련 타입을 손으로 복사해 동기화한다 (주석에 명시).
+- 이 Function은 정적 API 키가 아니라 Appwrite가 실행마다 주입하는 동적 `APPWRITE_FUNCTION_API_KEY`를 사용한다 (Function의 Execute/Scopes 설정에 따라 스코프가 제한됨). 대화 중 공유된 정적 API 키는 `apps/web/.env.local`의 `APPWRITE_API_KEY`에 보관용으로만 있고 어떤 코드도 읽지 않는다 — 채팅에 노출된 적이 있다면 Console에서 재발급 권장.
