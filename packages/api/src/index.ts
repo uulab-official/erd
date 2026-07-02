@@ -1,13 +1,14 @@
-// Thin wrapper around the Appwrite SDK for Project/Model persistence and Realtime.
-// See /docs/schema-engine.md (Project/Model containers) — the client never talks to Appwrite directly.
+// Appwrite SDK wrapper for Auth and Project/Model persistence/Realtime.
+// See /docs/schema-engine.md (Project/Model containers) — the client never talks to
+// Appwrite directly; everything goes through this package.
 import type { Model } from "@modelforge/schema-engine";
+import type { ModelStore } from "./modelStore.js";
 
-export interface ModelStore {
-  save(model: Model): Promise<void>;
-  load(modelId: string): Promise<Model | null>;
-}
+export * from "./client.js";
+export * from "./auth.js";
+export * from "./modelStore.js";
 
-// In-memory store used for local dev/tests until the AppwriteModelStore lands in Phase 1.
+// In-memory store used for local dev/tests without an Appwrite project configured.
 export function createInMemoryModelStore(): ModelStore {
   const models = new Map<string, Model>();
   return {
