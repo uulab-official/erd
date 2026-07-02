@@ -69,8 +69,8 @@ describe("validateModel", () => {
       },
       {
         id: "e2",
-        logicalName: "Order",
-        physicalName: "order",
+        logicalName: "Purchase",
+        physicalName: "purchase",
         tags: [],
         attributes: [
           {
@@ -110,5 +110,254 @@ describe("validateModel", () => {
     });
 
     expect(validateModel(model)).toEqual([]);
+  });
+
+  it("flags a duplicate index name", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+        {
+          id: "a2",
+          name: "email",
+          logicalName: "Email",
+          type: "string",
+          nullable: false,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [
+        { id: "i1", name: "idx_dup", attributeIds: ["a1"], unique: false },
+        { id: "i2", name: "idx_dup", attributeIds: ["a2"], unique: false },
+      ],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).toContain("duplicate-index-name");
+  });
+
+  it("flags two indexes covering the same columns", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [
+        { id: "i1", name: "idx_a", attributeIds: ["a1"], unique: false },
+        { id: "i2", name: "idx_b", attributeIds: ["a1"], unique: true },
+      ],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).toContain("duplicate-index-columns");
+  });
+
+  it("flags an entity physical name that is a reserved word", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Table",
+      physicalName: "table",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ code: "reserved-word", entityId: "e1" }),
+    );
+  });
+
+  it("flags an attribute name that is a reserved word", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "select",
+          logicalName: "Select",
+          type: "string",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ code: "reserved-word", attributeId: "a1" }),
+    );
+  });
+
+  it("honors a custom reserved word list instead of the default", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Widget",
+      physicalName: "widget",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model, ["widget"]).map((i) => i.code)).toContain("reserved-word");
+    expect(validateModel(model, ["nothing-matches"]).map((i) => i.code)).not.toContain(
+      "reserved-word",
+    );
+  });
+
+  it("flags a circular identifying relationship", () => {
+    const model = emptyModel();
+    const makeEntity = (id: string) => ({
+      id,
+      logicalName: id,
+      physicalName: id,
+      tags: [],
+      attributes: [
+        {
+          id: `${id}_id`,
+          name: "id",
+          logicalName: "ID",
+          type: "uuid" as const,
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+    model.entities.push(makeEntity("a"), makeEntity("b"), makeEntity("c"));
+    const identifying = (source: string, target: string, id: string) => ({
+      id,
+      sourceEntityId: source,
+      targetEntityId: target,
+      cardinality: "one-to-many" as const,
+      kind: "identifying" as const,
+      optionality: "mandatory" as const,
+      sourceAttributeIds: [`${source}_id`],
+      targetAttributeIds: [`${target}_id`],
+    });
+    model.relationships.push(
+      identifying("a", "b", "r1"),
+      identifying("b", "c", "r2"),
+      identifying("c", "a", "r3"),
+    );
+
+    const issues = validateModel(model);
+    expect(issues.map((i) => i.code)).toContain("circular-identifying-relationship");
+  });
+
+  it("does not flag a non-identifying cycle", () => {
+    const model = emptyModel();
+    const makeEntity = (id: string) => ({
+      id,
+      logicalName: id,
+      physicalName: id,
+      tags: [],
+      attributes: [
+        {
+          id: `${id}_id`,
+          name: "id",
+          logicalName: "ID",
+          type: "uuid" as const,
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+    model.entities.push(makeEntity("a"), makeEntity("b"));
+    model.relationships.push(
+      {
+        id: "r1",
+        sourceEntityId: "a",
+        targetEntityId: "b",
+        cardinality: "one-to-many",
+        kind: "non-identifying",
+        optionality: "optional",
+        sourceAttributeIds: ["a_id"],
+        targetAttributeIds: ["b_id"],
+      },
+      {
+        id: "r2",
+        sourceEntityId: "b",
+        targetEntityId: "a",
+        cardinality: "one-to-many",
+        kind: "non-identifying",
+        optionality: "optional",
+        sourceAttributeIds: ["b_id"],
+        targetAttributeIds: ["a_id"],
+      },
+    );
+
+    expect(validateModel(model).map((i) => i.code)).not.toContain(
+      "circular-identifying-relationship",
+    );
   });
 });
