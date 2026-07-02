@@ -52,3 +52,11 @@ pnpm format        # Prettier 적용
 ## MVP 로드맵
 
 Phase 1~4 우선순위는 [ARCHITECTURE.md#mvp-우선순위](ARCHITECTURE.md#mvp-우선순위) 참고.
+
+## 기여하기
+
+이슈와 PR 모두 환영합니다. 시작하기 전에 [CONTRIBUTING.md](CONTRIBUTING.md)를 읽어주세요 — 특히 이 프로젝트가 지키는 4가지 설계 원칙(Canvas/Model 분리, Operation 기반 변경, DB Adapter 구조, 플러그인 아키텍처)을 알아두면 리뷰가 훨씬 빨라집니다.
+
+## 라이선스
+
+[MIT](LICENSE)
