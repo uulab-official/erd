@@ -2,3 +2,4 @@
 export { createAdapterRegistry } from "@modelforge/sdk";
 export type { DatabaseAdapter, MigrationPlan, MigrationStep, DeployResult } from "@modelforge/sdk";
 export * from "./adapters/appwrite/index.js";
+export * from "./adapters/sql/index.js";

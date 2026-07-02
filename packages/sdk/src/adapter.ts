@@ -6,6 +6,7 @@ export interface MigrationStep {
     | "create-collection"
     | "drop-collection"
     | "create-table"
+    | "drop-table"
     | "add-attribute"
     | "drop-attribute"
     | "alter-attribute"

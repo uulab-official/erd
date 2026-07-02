@@ -29,7 +29,7 @@ Phase 구분은 [ARCHITECTURE.md#mvp-우선순위](ARCHITECTURE.md#mvp-우선순
 
 - [ ] AI ERD 생성/수정 (`AIProvider` 플러그인 인터페이스는 `packages/sdk`에 정의됨 — 실제 Provider 구현 필요)
 - [ ] ORM Generator (Prisma/Drizzle/TypeORM/JPA/Hibernate/Entity Framework)
-- [ ] SQL Generator (PostgreSQL/MySQL/SQLite Adapter — `SqlDialect` 공통 헬퍼 설계는 [docs/adapters.md](docs/adapters.md)에 있음)
+- [x] SQL Generator/Adapter — PostgreSQL(`SqlDialect`/`createPostgreSQLAdapter`, DDL Export, Deploy Plan) — [PR #11](https://github.com/uulab-official/erd/pull/11). MySQL/SQLite는 아직 (같은 `SqlDialect` 인터페이스로 새 dialect만 추가하면 됨)
 - [ ] OpenAPI/Swagger/GraphQL SDL Generator
 - [ ] 실시간 협업 (Appwrite Realtime — Cursor/Selection/Lock/Presence)
 - [ ] 댓글
@@ -49,3 +49,4 @@ Phase 구분은 [ARCHITECTURE.md#mvp-우선순위](ARCHITECTURE.md#mvp-우선순
 - `packages/*`의 엔진 코드(Operation, Adapter, Exporter)는 대부분 UI보다 앞서 구현되어 있다. 새 화면을 만들 때 먼저 해당 엔진에 필요한 기능이 이미 있는지 확인할 것.
 - Appwrite `apply()`(실제 배포 실행)와 실시간 Collection 목록 조회는 의도적으로 브라우저에서 직접 호출하지 않는다 — API 키가 필요한 관리자 작업이라 서버(Appwrite Function, `node-appwrite`)에서 실행해야 한다. 이 함수를 만드는 것이 Phase 1 잔여 항목("실시간 Collection Import", "Deploy 실행")의 선결 조건이다. 정적 `appwrite.json` 기반 Import는 이 제약 없이 이미 동작한다.
 - Appwrite Import는 컬렉션마다 암묵적 `$id` 기반 PK 속성을 합성한다(`packages/deploy-engine`의 `fromNativeSchema`) — Appwrite의 Attributes API/`appwrite.json`은 시스템 필드인 `$id`를 커스텀 attribute 목록에 포함하지 않기 때문. 이미 `id`라는 이름의 커스텀 attribute가 있으면 합성하지 않는다(이름 충돌 방지).
+- `createPostgreSQLAdapter`의 `apply()`도 Appwrite와 동일한 이유로 브라우저에서 직접 실행하지 않는다 — 실제 Postgres 연결(`pg` 등)이 필요한 서버사이드 `SqlExecutor` 구현체를 주입받는 구조다. 현재 apps/web에는 SQL Export만 연결되어 있고 Deploy Plan/apply UI는 Appwrite 전용이다.

@@ -211,6 +211,9 @@ importers:
 
   packages/generator:
     dependencies:
+      "@modelforge/deploy-engine":
+        specifier: workspace:*
+        version: link:../deploy-engine
       "@modelforge/schema-engine":
         specifier: workspace:*
         version: link:../schema-engine

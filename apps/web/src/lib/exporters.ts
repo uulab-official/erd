@@ -1,5 +1,11 @@
 import { jsPDF } from "jspdf";
-import { jsonExporter, markdownExporter, renderSvg, svgExporter } from "@modelforge/generator";
+import {
+  jsonExporter,
+  markdownExporter,
+  renderSvg,
+  sqlExporter,
+  svgExporter,
+} from "@modelforge/generator";
 import type { Model } from "@modelforge/schema-engine";
 import type { Exporter } from "@modelforge/sdk";
 
@@ -80,6 +86,7 @@ export const exporters: Exporter[] = [
   pdfExporter,
   markdownExporter,
   jsonExporter,
+  sqlExporter,
 ];
 
 const EXTENSION_BY_FORMAT: Record<string, string> = {
@@ -88,6 +95,7 @@ const EXTENSION_BY_FORMAT: Record<string, string> = {
   pdf: "pdf",
   markdown: "md",
   json: "json",
+  sql: "sql",
 };
 
 export async function downloadExport(exporter: Exporter, model: Model): Promise<void> {

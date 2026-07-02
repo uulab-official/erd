@@ -16,3 +16,4 @@ export const jsonSchemaExportGenerator: CodeGenerator = {
 export * from "./exporters/svg.js";
 export * from "./exporters/markdown.js";
 export * from "./exporters/json.js";
+export * from "./exporters/sql.js";
