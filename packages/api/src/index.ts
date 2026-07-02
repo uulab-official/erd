@@ -7,6 +7,7 @@ import type { ModelStore } from "./modelStore.js";
 export * from "./client.js";
 export * from "./auth.js";
 export * from "./modelStore.js";
+export type { Models } from "appwrite";
 
 // In-memory store used for local dev/tests without an Appwrite project configured.
 export function createInMemoryModelStore(): ModelStore {
