@@ -3,11 +3,11 @@ import { planAppwriteDeployment } from "@modelforge/deploy-engine";
 import { diffModels } from "@modelforge/diff-engine";
 import { useEditorStore } from "../store/useEditorStore.js";
 
-type Tab = "validation" | "diff" | "deploy";
+type Tab = "validation" | "diff" | "history" | "deploy";
 
 export function BottomPanel() {
   const [tab, setTab] = useState<Tab>("validation");
-  const { model, savedModel, issues } = useEditorStore();
+  const { model, savedModel, issues, historyLog, jumpToHistory } = useEditorStore();
 
   // Deploy Plan is scoped to what actually changed since the last save/deploy —
   // not a from-scratch plan — so it stays a true preview of applying the pending diff.
@@ -29,6 +29,12 @@ export function BottomPanel() {
           onClick={() => setTab("diff")}
         >
           Diff {diffCount > 0 && `(${diffCount})`}
+        </button>
+        <button
+          className={tab === "history" ? "font-semibold" : "text-neutral-500"}
+          onClick={() => setTab("history")}
+        >
+          History ({historyLog.length})
         </button>
         <button
           className={tab === "deploy" ? "font-semibold" : "text-neutral-500"}
@@ -67,6 +73,22 @@ export function BottomPanel() {
               ~ {name} changed
             </li>
           ))}
+        </ul>
+      )}
+
+      {tab === "history" && (
+        <ul className="p-4">
+          {historyLog.length === 0 && <li className="text-neutral-400">No history yet.</li>}
+          {[...historyLog].reverse().map((label, i) => {
+            const index = historyLog.length - 1 - i;
+            return (
+              <li key={index}>
+                <button className="hover:underline" onClick={() => jumpToHistory(index)}>
+                  {index + 1}. {label}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
 

@@ -22,3 +22,4 @@ export * from "./operations/relationship.js";
 export * from "./operations/apply.js";
 export * from "./operations/transaction.js";
 export * from "./operations/history.js";
+export * from "./operations/describe.js";

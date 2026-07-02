@@ -1,7 +1,12 @@
 import { create } from "zustand";
 import type { Model } from "@modelforge/schema-engine";
 import { validateModel, type ValidationIssue } from "@modelforge/schema-engine";
-import { createEntity, deleteEntityCascade, OperationHistory } from "@modelforge/erd-engine";
+import {
+  createEntity,
+  deleteEntityCascade,
+  describeHistoryEntry,
+  OperationHistory,
+} from "@modelforge/erd-engine";
 import { getModelStore } from "../lib/appwrite.js";
 
 const ACTOR_ID = "local-user";
@@ -33,12 +38,16 @@ interface EditorState {
   issues: ValidationIssue[];
   canUndo: boolean;
   canRedo: boolean;
+  // Oldest first, mirroring OperationHistory.entries() — the History tab renders labels
+  // via describeHistoryEntry() at the time each entry is pushed/popped.
+  historyLog: string[];
   saving: boolean;
   loading: boolean;
   addEntity(logicalName: string): void;
   removeEntity(entityId: string): void;
   undo(): void;
   redo(): void;
+  jumpToHistory(index: number): void;
   save(): Promise<void>;
   load(modelId: string): Promise<void>;
   newProject(id: string, name: string): void;
@@ -49,7 +58,11 @@ interface EditorState {
 let history = new OperationHistory();
 
 function historyFlags() {
-  return { canUndo: history.canUndo(), canRedo: history.canRedo() };
+  return {
+    canUndo: history.canUndo(),
+    canRedo: history.canRedo(),
+    historyLog: history.entries().map(describeHistoryEntry),
+  };
 }
 
 const initialModel = emptyModel("default", "Untitled Project");
@@ -60,6 +73,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   issues: [],
   canUndo: false,
   canRedo: false,
+  historyLog: [],
   saving: false,
   loading: false,
 
@@ -107,6 +121,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   redo() {
     const model = history.redo(get().model);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  jumpToHistory(index) {
+    const model = history.jumpToIndex(get().model, index);
     set({ model, issues: validateModel(model), ...historyFlags() });
   },
 

@@ -5,7 +5,7 @@ import { undoTransaction, redoTransaction } from "./transaction.js";
 
 export type HistoryEntry = Operation | Transaction;
 
-function isTransaction(entry: HistoryEntry): entry is Transaction {
+export function isTransaction(entry: HistoryEntry): entry is Transaction {
   return "operations" in entry;
 }
 
@@ -28,6 +28,11 @@ export class OperationHistory {
     return this.redoStack.length > 0;
   }
 
+  // Oldest first — what a History Panel renders top-to-bottom or bottom-to-top.
+  entries(): readonly HistoryEntry[] {
+    return [...this.undoStack];
+  }
+
   undo(model: Model): Model {
     const entry = this.undoStack.pop();
     if (!entry) return model;
@@ -42,5 +47,18 @@ export class OperationHistory {
     return isTransaction(entry)
       ? redoTransaction(model, entry)
       : applyOperation(model, toDispatchable(entry));
+  }
+
+  // Rewinds to just after entries()[index] was applied, i.e. undoes every entry after
+  // it. Only rewinds backward — index must point at an entry already in the undo stack
+  // (a no-op if it's out of range, so callers can't accidentally skip forward).
+  jumpToIndex(model: Model, index: number): Model {
+    const targetLength = index + 1;
+    if (index < 0 || targetLength > this.undoStack.length) return model;
+    let current = model;
+    while (this.undoStack.length > targetLength) {
+      current = this.undo(current);
+    }
+    return current;
   }
 }

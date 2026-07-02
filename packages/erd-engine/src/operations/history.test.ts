@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createEntity, renameEntity } from "./entity.js";
 import { deleteEntityCascade } from "./transaction.js";
 import { OperationHistory } from "./history.js";
+import { describeHistoryEntry } from "./describe.js";
 import { customerEntity, emptyModel } from "./test-fixtures.js";
 
 describe("OperationHistory", () => {
@@ -65,5 +66,58 @@ describe("OperationHistory", () => {
     const model = emptyModel();
     expect(history.undo(model)).toBe(model);
     expect(history.redo(model)).toBe(model);
+  });
+
+  it("entries() reflects push/undo/redo in chronological order", () => {
+    const history = new OperationHistory();
+    const empty = emptyModel();
+    const created = createEntity(empty, customerEntity(), "user-1");
+    history.push(created.operation);
+    const renamed = renameEntity(
+      created.model,
+      { entityId: "customer", logicalName: "Client" },
+      "user-1",
+    );
+    history.push(renamed.operation);
+
+    expect(history.entries().map(describeHistoryEntry)).toEqual(["Create entity", "Rename entity"]);
+
+    history.undo(renamed.model);
+    expect(history.entries().map(describeHistoryEntry)).toEqual(["Create entity"]);
+  });
+
+  it("jumpToIndex rewinds to just after the given entry", () => {
+    const history = new OperationHistory();
+    const empty = emptyModel();
+    const created = createEntity(empty, customerEntity(), "user-1");
+    history.push(created.operation);
+    const renamed = renameEntity(
+      created.model,
+      { entityId: "customer", logicalName: "Client" },
+      "user-1",
+    );
+    history.push(renamed.operation);
+    const moved = renameEntity(
+      renamed.model,
+      { entityId: "customer", logicalName: "Buyer" },
+      "user-1",
+    );
+    history.push(moved.operation);
+
+    const rewound = history.jumpToIndex(moved.model, 0);
+    expect(rewound).toEqual(created.model);
+    expect(history.entries()).toHaveLength(1);
+    expect(history.canRedo()).toBe(true);
+  });
+
+  it("jumpToIndex is a no-op for an out-of-range index", () => {
+    const history = new OperationHistory();
+    const empty = emptyModel();
+    const created = createEntity(empty, customerEntity(), "user-1");
+    history.push(created.operation);
+
+    expect(history.jumpToIndex(created.model, 5)).toBe(created.model);
+    expect(history.jumpToIndex(created.model, -1)).toBe(created.model);
+    expect(history.entries()).toHaveLength(1);
   });
 });

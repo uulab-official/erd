@@ -1,0 +1,28 @@
+import type { HistoryEntry } from "./history.js";
+import { isTransaction } from "./history.js";
+import type { OperationType } from "./types.js";
+
+const LABELS: Record<OperationType, string> = {
+  CreateEntity: "Create entity",
+  DeleteEntity: "Delete entity",
+  RenameEntity: "Rename entity",
+  MoveEntity: "Move entity",
+  SetEntityMeta: "Update entity metadata",
+  AddAttribute: "Add attribute",
+  RemoveAttribute: "Remove attribute",
+  RenameAttribute: "Rename attribute",
+  ChangeAttributeType: "Change attribute type",
+  SetAttributeFlags: "Update attribute flags",
+  SetAttributeDefault: "Set attribute default",
+  CreateRelationship: "Create relationship",
+  DeleteRelationship: "Delete relationship",
+  ChangeRelationshipCardinality: "Change relationship cardinality",
+  ChangeRelationshipKind: "Change relationship kind",
+};
+
+// Human-readable label for a History Panel entry. Transactions already carry their own
+// label (docs/operations.md); single Operations are labeled by type.
+export function describeHistoryEntry(entry: HistoryEntry): string {
+  if (isTransaction(entry)) return entry.label;
+  return LABELS[entry.type as OperationType] ?? entry.type;
+}
