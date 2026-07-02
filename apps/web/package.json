@@ -15,6 +15,7 @@
     "@modelforge/api": "workspace:*",
     "@modelforge/canvas": "workspace:*",
     "@modelforge/deploy-engine": "workspace:*",
+    "@modelforge/diff-engine": "workspace:*",
     "@modelforge/erd-engine": "workspace:*",
     "@modelforge/generator": "workspace:*",
     "@modelforge/schema-engine": "workspace:*",

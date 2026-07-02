@@ -26,6 +26,10 @@ function toPhysicalName(logicalName: string): string {
 
 interface EditorState {
   model: Model;
+  // The last loaded-from/saved-to snapshot — the Diff tab compares the live model
+  // against this, mirroring "현재 모델 ↔ 운영 DB 비교" in docs/operations.md. A brand
+  // new, never-saved project's baseline is its own starting (empty) model.
+  savedModel: Model;
   issues: ValidationIssue[];
   canUndo: boolean;
   canRedo: boolean;
@@ -48,8 +52,11 @@ function historyFlags() {
   return { canUndo: history.canUndo(), canRedo: history.canRedo() };
 }
 
+const initialModel = emptyModel("default", "Untitled Project");
+
 export const useEditorStore = create<EditorState>((set, get) => ({
-  model: emptyModel("default", "Untitled Project"),
+  model: initialModel,
+  savedModel: initialModel,
   issues: [],
   canUndo: false,
   canRedo: false,
@@ -106,7 +113,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   async save() {
     set({ saving: true });
     try {
-      await getModelStore().save(get().model);
+      const model = get().model;
+      await getModelStore().save(model);
+      set({ savedModel: model });
     } finally {
       set({ saving: false });
     }
@@ -118,7 +127,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const loaded = await getModelStore().load(modelId);
       const model = loaded ?? emptyModel(modelId, modelId);
       history = new OperationHistory();
-      set({ model, issues: validateModel(model), ...historyFlags() });
+      set({ model, savedModel: model, issues: validateModel(model), ...historyFlags() });
     } finally {
       set({ loading: false });
     }
@@ -127,6 +136,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   newProject(id, name) {
     const model = emptyModel(id, name);
     history = new OperationHistory();
-    set({ model, issues: [], ...historyFlags() });
+    set({ model, savedModel: model, issues: [], ...historyFlags() });
   },
 }));

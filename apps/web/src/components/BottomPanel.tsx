@@ -1,14 +1,19 @@
 import { useMemo, useState } from "react";
 import { planAppwriteDeployment } from "@modelforge/deploy-engine";
+import { diffModels } from "@modelforge/diff-engine";
 import { useEditorStore } from "../store/useEditorStore.js";
 
-type Tab = "validation" | "deploy";
+type Tab = "validation" | "diff" | "deploy";
 
 export function BottomPanel() {
   const [tab, setTab] = useState<Tab>("validation");
-  const { model, issues } = useEditorStore();
+  const { model, savedModel, issues } = useEditorStore();
 
-  const plan = useMemo(() => planAppwriteDeployment(model, null), [model]);
+  // Deploy Plan is scoped to what actually changed since the last save/deploy —
+  // not a from-scratch plan — so it stays a true preview of applying the pending diff.
+  const plan = useMemo(() => planAppwriteDeployment(model, savedModel), [model, savedModel]);
+  const diff = useMemo(() => diffModels(savedModel, model), [savedModel, model]);
+  const diffCount = diff.added.length + diff.removed.length + diff.changed.length;
 
   return (
     <div className="h-48 overflow-y-auto border-t border-neutral-200 bg-white text-sm">
@@ -18,6 +23,12 @@ export function BottomPanel() {
           onClick={() => setTab("validation")}
         >
           Validation {issues.length > 0 && `(${issues.length})`}
+        </button>
+        <button
+          className={tab === "diff" ? "font-semibold" : "text-neutral-500"}
+          onClick={() => setTab("diff")}
+        >
+          Diff {diffCount > 0 && `(${diffCount})`}
         </button>
         <button
           className={tab === "deploy" ? "font-semibold" : "text-neutral-500"}
@@ -33,6 +44,27 @@ export function BottomPanel() {
           {issues.map((issue, i) => (
             <li key={i} className={issue.severity === "error" ? "text-red-600" : "text-amber-600"}>
               [{issue.severity}] {issue.message}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {tab === "diff" && (
+        <ul className="p-4">
+          {diffCount === 0 && <li className="text-neutral-400">No changes since the last save.</li>}
+          {diff.added.map((name) => (
+            <li key={`added-${name}`} className="text-green-700">
+              + {name} created
+            </li>
+          ))}
+          {diff.removed.map((name) => (
+            <li key={`removed-${name}`} className="text-red-600">
+              - {name} deleted
+            </li>
+          ))}
+          {diff.changed.map((name) => (
+            <li key={`changed-${name}`} className="text-amber-600">
+              ~ {name} changed
             </li>
           ))}
         </ul>

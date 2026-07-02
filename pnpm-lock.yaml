@@ -49,6 +49,9 @@ importers:
       "@modelforge/deploy-engine":
         specifier: workspace:*
         version: link:../../packages/deploy-engine
+      "@modelforge/diff-engine":
+        specifier: workspace:*
+        version: link:../../packages/diff-engine
       "@modelforge/erd-engine":
         specifier: workspace:*
         version: link:../../packages/erd-engine
