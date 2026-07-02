@@ -1,12 +1,5 @@
-// Owns Entity/Attribute/Relationship/Index/Enum/Domain/Sequence/View/SubjectArea CRUD via Operations.
-// Phase 1: implemented as apply(model, Operation) -> { model, inverse }. See /docs/operations.md.
+// Owns Entity/Attribute/Relationship CRUD via Operations. See /docs/operations.md.
 import type { Model } from "@modelforge/schema-engine";
-import type { Operation } from "@modelforge/sdk";
-
-export interface ApplyResult {
-  model: Model;
-  inverse: Operation;
-}
 
 export function createEmptyModel(id: string, name: string, adapter: Model["adapter"]): Model {
   return {
@@ -20,3 +13,12 @@ export function createEmptyModel(id: string, name: string, adapter: Model["adapt
     enums: [],
   };
 }
+
+export * from "./operations/types.js";
+export * from "./operations/operation.js";
+export * from "./operations/entity.js";
+export * from "./operations/attribute.js";
+export * from "./operations/relationship.js";
+export * from "./operations/apply.js";
+export * from "./operations/transaction.js";
+export * from "./operations/history.js";
