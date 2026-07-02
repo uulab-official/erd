@@ -4,13 +4,15 @@ import type { AdapterKind, ColumnType, Model } from "@modelforge/schema-engine";
 export interface MigrationStep {
   action:
     | "create-collection"
+    | "drop-collection"
     | "create-table"
     | "add-attribute"
     | "drop-attribute"
     | "alter-attribute"
     | "create-index"
     | "drop-index"
-    | "create-relationship";
+    | "create-relationship"
+    | "drop-relationship";
   target: string;
   sql?: string;
   appwriteCall?: unknown;
