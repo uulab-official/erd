@@ -4,10 +4,13 @@ import {
   createAuthService,
   createInMemoryModelStore,
   invokeDeployFunction,
+  invokeListAppwriteSchema,
   pingAppwrite,
   type AuthService,
   type ModelStore,
 } from "@modelforge/api";
+import { fromNativeSchema } from "@modelforge/deploy-engine";
+import type { Model } from "@modelforge/schema-engine";
 import type { DeployResult, MigrationPlan } from "@modelforge/sdk";
 
 const endpoint = import.meta.env.VITE_APPWRITE_ENDPOINT;
@@ -34,6 +37,23 @@ export async function deployPlan(plan: MigrationPlan): Promise<DeployResult> {
   }
   const client = createAppwriteClient({ endpoint: endpoint!, projectId: projectId! });
   return invokeDeployFunction(client, deployFunctionId!, { databaseId: databaseId!, plan });
+}
+
+// Imports the live schema of the configured database by invoking the SAME deploy-appwrite
+// Function with { action: "list" } — reuses the deploy Function's admin key rather than
+// standing up a separate read-only Function, since apply() already requires strictly more
+// privilege than list() needs. Gated on `canDeploy` for that reason (same Function id).
+export async function importLiveAppwriteSchema(): Promise<Model> {
+  if (!canDeploy) {
+    throw new Error(
+      "Live import is not configured — set VITE_APPWRITE_DEPLOY_FUNCTION_ID (and the database/table env vars).",
+    );
+  }
+  const client = createAppwriteClient({ endpoint: endpoint!, projectId: projectId! });
+  const native = await invokeListAppwriteSchema(client, deployFunctionId!, {
+    databaseId: databaseId!,
+  });
+  return fromNativeSchema(native);
 }
 
 // Connectivity only needs endpoint+project (no database/session), so this is checkable

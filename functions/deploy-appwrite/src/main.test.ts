@@ -15,6 +15,9 @@ vi.mock("node-appwrite", () => ({
 const applyPlanMock = vi.fn();
 vi.mock("./applyPlan.js", () => ({ applyPlan: applyPlanMock }));
 
+const listSchemaMock = vi.fn();
+vi.mock("./listSchema.js", () => ({ listSchema: listSchemaMock }));
+
 const { default: main } = await import("./main.js");
 
 function fakeContext(overrides: { bodyJson?: unknown; headers?: Record<string, string> } = {}) {
@@ -106,5 +109,30 @@ describe("main (Appwrite Function entrypoint)", () => {
 
     expect(ctx.error).toHaveBeenCalled();
     expect(ctx.jsonCalls[0]?.data).toEqual(failedResult);
+  });
+
+  it('rejects a { action: "list" } body missing databaseId', async () => {
+    const ctx = fakeContext({ bodyJson: { action: "list" } });
+    await main(ctx as never);
+    expect(ctx.jsonCalls[0]?.status).toBe(400);
+    expect(listSchemaMock).not.toHaveBeenCalled();
+  });
+
+  it('lists collections and returns the result for an { action: "list" } body', async () => {
+    process.env.APPWRITE_FUNCTION_API_ENDPOINT = "https://appwrite.example/v1";
+    process.env.APPWRITE_FUNCTION_PROJECT_ID = "proj-1";
+    process.env.APPWRITE_FUNCTION_API_KEY = "dynamic-key";
+    listSchemaMock.mockResolvedValueOnce({
+      collections: [{ $id: "customer", name: "Customer", attributes: [], indexes: [] }],
+    });
+
+    const ctx = fakeContext({ bodyJson: { action: "list", databaseId: "db-1" } });
+    await main(ctx as never);
+
+    expect(listSchemaMock).toHaveBeenCalledWith(expect.anything(), "db-1");
+    expect(applyPlanMock).not.toHaveBeenCalled();
+    expect(ctx.jsonCalls[0]?.data).toEqual({
+      collections: [{ $id: "customer", name: "Customer", attributes: [], indexes: [] }],
+    });
   });
 });

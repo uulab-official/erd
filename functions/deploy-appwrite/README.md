@@ -9,15 +9,32 @@ and `AppwriteAdapter`/`AppwriteAdminAPI` in `packages/deploy-engine`).
 
 ## What it does
 
-1. Receives `{ databaseId, plan }` in the execution request body.
-2. Rejects the request unless it came from an authenticated session
-   (`x-appwrite-user-id` header) — defense in depth on top of the Function's own execute
-   permissions (see below).
-3. Applies `plan.steps` against the Databases API in dependency-safe order — see the
-   comment at the top of `src/applyPlan.ts` for why a plain top-to-bottom replay of the
-   plan isn't safe (a brand-new collection's relationship attributes reference another
-   collection that might not exist yet).
-4. Returns a `DeployResult` (`{ planId, appliedSteps, failedStep? }`) as JSON.
+This Function handles two request shapes, dispatched on an `action` field:
+
+- **Apply a Deploy Plan** — `{ databaseId, plan }` (`action` omitted or `"apply"`).
+  1. Rejects the request unless it came from an authenticated session
+     (`x-appwrite-user-id` header) — defense in depth on top of the Function's own execute
+     permissions (see below).
+  2. Applies `plan.steps` against the Databases API in dependency-safe order — see the
+     comment at the top of `src/applyPlan.ts` for why a plain top-to-bottom replay of the
+     plan isn't safe (a brand-new collection's relationship attributes reference another
+     collection that might not exist yet).
+  3. Returns a `DeployResult` (`{ planId, appliedSteps, failedStep? }`) as JSON.
+
+- **List live collections** — `{ action: "list", databaseId }`, used for live Collection
+  Import.
+  1. Same authenticated-session check as above.
+  2. Lists every collection in the database via `src/listSchema.ts`, with attributes and
+     indexes already embedded (paginating past Appwrite's 25-per-page default).
+  3. Returns `{ collections: [...] }` in the exact wire shape Appwrite's CLI writes to
+     `appwrite.json` — the caller (`packages/api`'s `invokeListAppwriteSchema`) feeds it
+     straight through `@modelforge/deploy-engine`'s existing `parseAppwriteJson` +
+     `fromNativeSchema`, so no attribute-shape mapping is duplicated here.
+
+Both actions share the same Databases-scoped API key rather than living in two Functions —
+`apply` already needs the write scope that `list`'s read-only calls are a strict subset
+of, so splitting them wouldn't reduce the privilege surface, only double the deployment
+boilerplate.
 
 ## Deploying this Function
 
@@ -86,8 +103,9 @@ VITE_APPWRITE_DEPLOY_FUNCTION_ID=deploy-appwrite
 ```
 
 The Deploy Plan tab's "Deploy to Appwrite" button (`apps/web/src/components/BottomPanel.tsx`)
-only appears once this, plus the database/table env vars, are all set — see
-`apps/web/src/lib/appwrite.ts`'s `canDeploy`.
+and the Toolbar's "Import Live" button (`apps/web/src/components/Toolbar.tsx`) both only
+appear once this, plus the database/table env vars, are all set — see
+`apps/web/src/lib/appwrite.ts`'s `canDeploy`. Both features invoke the same Function id.
 
 ## Local development
 

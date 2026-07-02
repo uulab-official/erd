@@ -5,12 +5,14 @@ import { useAuthStore } from "../store/useAuthStore.js";
 import { downloadExport, exporters } from "../lib/exporters.js";
 import { downloadGenerated, generators } from "../lib/generators.js";
 import { importAppwriteJsonFile } from "../lib/importAppwrite.js";
+import { canDeploy, importLiveAppwriteSchema } from "../lib/appwrite.js";
 
 export function Toolbar() {
   const [entityName, setEntityName] = useState("");
   const [exporting, setExporting] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importingLive, setImportingLive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { model, canUndo, canRedo, saving, addEntity, undo, redo, save, importModel } =
     useEditorStore();
@@ -55,6 +57,26 @@ export function Toolbar() {
     }
   }
 
+  async function handleImportLive() {
+    if (
+      !window.confirm(
+        "This replaces the current model with the live schema from your Appwrite project. Unsaved changes will be lost. Continue?",
+      )
+    ) {
+      return;
+    }
+    setImportError(null);
+    setImportingLive(true);
+    try {
+      const imported = await importLiveAppwriteSchema();
+      importModel(imported);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setImportingLive(false);
+    }
+  }
+
   return (
     <header className="flex items-center gap-2 border-b border-neutral-200 px-4 py-2">
       <h1 className="mr-2 text-lg font-semibold">ModelForge</h1>
@@ -91,6 +113,11 @@ export function Toolbar() {
       <Button variant="ghost" onClick={() => fileInputRef.current?.click()}>
         Import
       </Button>
+      {canDeploy && (
+        <Button variant="ghost" onClick={() => void handleImportLive()} disabled={importingLive}>
+          {importingLive ? "Importing…" : "Import Live"}
+        </Button>
+      )}
       {importError && (
         <span className="max-w-xs truncate text-sm text-red-600" title={importError}>
           {importError}

@@ -69,6 +69,33 @@ describe("parseAppwriteJson", () => {
     });
   });
 
+  it("normalizes Appwrite's raw wire attribute types onto our AppwriteAttributeType", () => {
+    const schema = parseAppwriteJson(
+      JSON.stringify({
+        collections: [
+          {
+            $id: "widget",
+            name: "Widget",
+            attributes: [
+              { key: "price", type: "double", required: true, array: false },
+              { key: "sku", type: "varchar", required: true, array: false, size: 64 },
+              { key: "notes", type: "text", required: false, array: false },
+              { key: "contact", type: "email", required: false, array: false },
+              { key: "count", type: "bigint", required: false, array: false },
+            ],
+            indexes: [],
+          },
+        ],
+      }),
+    );
+    const byKey = Object.fromEntries(schema.collections[0]!.attributes.map((a) => [a.key, a]));
+    expect(byKey.price).toMatchObject({ type: "float" });
+    expect(byKey.sku).toMatchObject({ type: "string" });
+    expect(byKey.notes).toMatchObject({ type: "string" });
+    expect(byKey.contact).toMatchObject({ type: "string" });
+    expect(byKey.count).toMatchObject({ type: "integer" });
+  });
+
   it("rejects invalid JSON", () => {
     expect(() => parseAppwriteJson("not json")).toThrow("Not valid JSON");
   });

@@ -45,14 +45,29 @@ interface AppwriteJsonFile {
   collections?: AppwriteJsonCollection[];
 }
 
-const ATTRIBUTE_TYPES = new Set<AppwriteAttributeType>([
-  "string",
-  "integer",
-  "float",
-  "boolean",
-  "datetime",
-  "enum",
-]);
+// Appwrite's Attributes API (and thus both `appwrite.json` exports and a live
+// listCollections() call — same wire format) uses "double" for what we call "float", and
+// has several string-ish variants (email/url/ip, plus TablesDB's varchar/text/mediumtext/
+// longtext) that all map onto our single "string" type. Unrecognized types fall back to
+// "string" rather than throwing, since this is a read path and we'd rather import an
+// approximate attribute than fail the whole collection.
+const ATTRIBUTE_TYPE_ALIASES: Record<string, AppwriteAttributeType> = {
+  string: "string",
+  varchar: "string",
+  text: "string",
+  mediumtext: "string",
+  longtext: "string",
+  email: "string",
+  url: "string",
+  ip: "string",
+  integer: "integer",
+  bigint: "integer",
+  float: "float",
+  double: "float",
+  boolean: "boolean",
+  datetime: "datetime",
+  enum: "enum",
+};
 
 const RELATION_TYPES = new Set<AppwriteRelationType>([
   "oneToOne",
@@ -81,9 +96,7 @@ function parseAttribute(attr: AppwriteJsonAttribute) {
     };
   }
 
-  const type = ATTRIBUTE_TYPES.has(attr.type as AppwriteAttributeType)
-    ? (attr.type as AppwriteAttributeType)
-    : "string";
+  const type = ATTRIBUTE_TYPE_ALIASES[attr.type] ?? "string";
   return {
     key: attr.key,
     type,

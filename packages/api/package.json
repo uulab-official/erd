@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@modelforge/deploy-engine": "workspace:*",
     "@modelforge/schema-engine": "workspace:*",
     "@modelforge/sdk": "workspace:*",
     "appwrite": "^17.0.0"

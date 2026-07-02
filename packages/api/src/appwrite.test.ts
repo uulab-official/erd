@@ -56,7 +56,7 @@ vi.mock("appwrite", () => ({
 const { createAppwriteClient, pingAppwrite } = await import("./client.js");
 const { createAuthService } = await import("./auth.js");
 const { createAppwriteModelStore } = await import("./modelStore.js");
-const { invokeDeployFunction } = await import("./functions.js");
+const { invokeDeployFunction, invokeListAppwriteSchema } = await import("./functions.js");
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -169,6 +169,47 @@ describe("invokeDeployFunction", () => {
 
     await expect(
       invokeDeployFunction(new FakeClient() as never, "fn-1", { databaseId: "db-1", plan }),
+    ).rejects.toThrow(/500/);
+  });
+});
+
+describe("invokeListAppwriteSchema", () => {
+  it("triggers a list-action execution and parses the response as an appwrite.json export", async () => {
+    createExecution.mockResolvedValueOnce({
+      responseStatusCode: 200,
+      responseBody: JSON.stringify({
+        collections: [
+          {
+            $id: "customer",
+            name: "Customer",
+            attributes: [{ key: "email", type: "string", required: true, array: false }],
+            indexes: [],
+          },
+        ],
+      }),
+    });
+
+    const result = await invokeListAppwriteSchema(new FakeClient() as never, "fn-1", {
+      databaseId: "db-1",
+    });
+
+    expect(createExecution).toHaveBeenCalledWith(
+      "fn-1",
+      JSON.stringify({ action: "list", databaseId: "db-1" }),
+      false,
+    );
+    expect(result.collections).toHaveLength(1);
+    expect(result.collections[0]).toMatchObject({ id: "customer", name: "Customer" });
+  });
+
+  it("throws when the Function returns an error status", async () => {
+    createExecution.mockResolvedValueOnce({
+      responseStatusCode: 500,
+      responseBody: '{"error":"boom"}',
+    });
+
+    await expect(
+      invokeListAppwriteSchema(new FakeClient() as never, "fn-1", { databaseId: "db-1" }),
     ).rejects.toThrow(/500/);
   });
 });
