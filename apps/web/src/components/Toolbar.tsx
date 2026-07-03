@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Button } from "@modelforge/ui";
+import { Button, Input, Select } from "@modelforge/ui";
 import { useEditorStore } from "../store/useEditorStore.js";
 import { useAuthStore } from "../store/useAuthStore.js";
 import { useNavigationStore } from "../store/useNavigationStore.js";
@@ -7,6 +7,10 @@ import { downloadExport, exporters } from "../lib/exporters.js";
 import { downloadGenerated, generators } from "../lib/generators.js";
 import { importAppwriteJsonFile } from "../lib/importAppwrite.js";
 import { canDeploy, importLiveAppwriteSchema } from "../lib/appwrite.js";
+
+function Divider() {
+  return <div className="mx-1 h-6 w-px bg-slate-200" />;
+}
 
 export function Toolbar() {
   const [entityName, setEntityName] = useState("");
@@ -90,31 +94,33 @@ export function Toolbar() {
   }
 
   return (
-    <header className="flex items-center gap-2 border-b border-neutral-200 px-4 py-2">
-      <h1 className="mr-2 text-lg font-semibold">ModelForge</h1>
-      <Button variant="ghost" onClick={handleBackToModels}>
+    <header className="flex items-center gap-1.5 border-b border-slate-200 bg-white px-3 py-2">
+      <Button variant="ghost" size="sm" onClick={handleBackToModels}>
         ← Models
       </Button>
-      <span className="mr-4 text-sm text-neutral-500">{model.name}</span>
+      <span className="mr-1 truncate text-sm font-semibold text-slate-900">{model.name}</span>
+      <Divider />
 
-      <input
+      <Input
         value={entityName}
         onChange={(e) => setEntityName(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && handleAddEntity()}
         placeholder="New entity name"
-        className="w-40 rounded border border-neutral-300 px-2 py-1 text-sm"
+        className="w-40"
       />
-      <Button variant="secondary" onClick={handleAddEntity}>
+      <Button variant="secondary" size="sm" onClick={handleAddEntity}>
         Add Entity
       </Button>
 
-      <Button variant="ghost" onClick={undo} disabled={!canUndo}>
+      <Divider />
+      <Button variant="ghost" size="sm" onClick={undo} disabled={!canUndo}>
         Undo
       </Button>
-      <Button variant="ghost" onClick={redo} disabled={!canRedo}>
+      <Button variant="ghost" size="sm" onClick={redo} disabled={!canRedo}>
         Redo
       </Button>
 
+      <Divider />
       <input
         ref={fileInputRef}
         type="file"
@@ -125,11 +131,16 @@ export function Toolbar() {
           e.target.value = "";
         }}
       />
-      <Button variant="ghost" onClick={() => fileInputRef.current?.click()}>
+      <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()}>
         Import
       </Button>
       {canDeploy && (
-        <Button variant="ghost" onClick={() => void handleImportLive()} disabled={importingLive}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => void handleImportLive()}
+          disabled={importingLive}
+        >
           {importingLive ? "Importing…" : "Import Live"}
         </Button>
       )}
@@ -140,8 +151,7 @@ export function Toolbar() {
       )}
 
       <div className="ml-auto flex items-center gap-2">
-        <select
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+        <Select
           disabled={exporting}
           value=""
           onChange={(e) => e.target.value && void handleExport(e.target.value)}
@@ -154,10 +164,9 @@ export function Toolbar() {
               {exporter.label}
             </option>
           ))}
-        </select>
+        </Select>
 
-        <select
-          className="rounded border border-neutral-300 px-2 py-1 text-sm"
+        <Select
           disabled={generating}
           value=""
           onChange={(e) => e.target.value && void handleGenerate(e.target.value)}
@@ -170,15 +179,16 @@ export function Toolbar() {
               {generator.label}
             </option>
           ))}
-        </select>
+        </Select>
 
-        <Button variant="primary" onClick={() => void save()} disabled={saving}>
+        <Button variant="primary" size="sm" onClick={() => void save()} disabled={saving}>
           {saving ? "Saving…" : "Save"}
         </Button>
         {user && (
           <>
-            <span className="text-sm text-neutral-500">{user.email}</span>
-            <Button variant="ghost" onClick={() => void logout()}>
+            <Divider />
+            <span className="text-sm text-slate-500">{user.email}</span>
+            <Button variant="ghost" size="sm" onClick={() => void logout()}>
               Logout
             </Button>
           </>

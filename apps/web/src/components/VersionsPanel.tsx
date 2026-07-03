@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Model } from "@modelforge/schema-engine";
 import { diffModels } from "@modelforge/diff-engine";
+import { Button, Card, Input } from "@modelforge/ui";
 import { useEditorStore } from "../store/useEditorStore.js";
 
 function formatCreatedAt(iso: string): string {
@@ -85,41 +86,45 @@ export function VersionsPanel() {
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex gap-2">
-        <input
+        <Input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void handleSave()}
           placeholder="Version label (e.g. v1 - initial schema)"
-          className="flex-1 rounded border border-neutral-300 px-2 py-1 text-sm"
+          className="flex-1"
         />
-        <button
-          className="rounded bg-neutral-800 px-3 py-1 text-sm text-white disabled:opacity-50"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => void handleSave()}
           disabled={saving || !label.trim()}
         >
           {saving ? "Saving…" : "Save Version"}
-        </button>
+        </Button>
       </div>
 
-      {versionsLoading && <p className="text-neutral-400">Loading…</p>}
+      {versionsLoading && <p className="text-sm text-slate-400">Loading…</p>}
       {!versionsLoading && versions.length === 0 && (
-        <p className="text-neutral-400">
+        <p className="text-sm text-slate-400">
           No versions saved yet — save one above to create a restorable snapshot.
         </p>
       )}
 
       <ul className="flex flex-col gap-2">
         {versions.map((version) => (
-          <li key={version.id} className="rounded border border-neutral-200 p-2">
+          <Card key={version.id} as="li" className="p-3">
             <div className="flex items-center gap-2">
-              <span className="font-medium">{version.label}</span>
-              <span className="text-xs text-neutral-500">{formatCreatedAt(version.createdAt)}</span>
-              <div className="ml-auto flex gap-2">
-                <button className="hover:underline" onClick={() => void handleCompare(version.id)}>
+              <span className="font-medium text-slate-900">{version.label}</span>
+              <span className="text-xs text-slate-500">{formatCreatedAt(version.createdAt)}</span>
+              <div className="ml-auto flex gap-3 text-sm">
+                <button
+                  className="text-slate-600 hover:underline"
+                  onClick={() => void handleCompare(version.id)}
+                >
                   {compareId === version.id ? "Hide" : "Compare"}
                 </button>
                 <button
-                  className="hover:underline"
+                  className="text-brand-700 hover:underline"
                   onClick={() => void handleRestore(version.id, version.label)}
                 >
                   Restore
@@ -134,14 +139,14 @@ export function VersionsPanel() {
             </div>
 
             {compareId === version.id && (
-              <div className="ml-4 mt-2 text-xs">
+              <div className="ml-4 mt-3 border-l border-slate-200 pl-3 text-xs">
                 {compareError && <p className="text-red-600">{compareError}</p>}
-                {!compareError && !compareSnapshot && <p className="text-neutral-400">Loading…</p>}
+                {!compareError && !compareSnapshot && <p className="text-slate-400">Loading…</p>}
                 {compareDiff && compareDiffCount === 0 && (
-                  <p className="text-neutral-400">No changes since this version.</p>
+                  <p className="text-slate-400">No changes since this version.</p>
                 )}
                 {compareDiff && (
-                  <ul>
+                  <ul className="flex flex-col gap-0.5">
                     {compareDiff.added.map((name) => (
                       <li key={`added-${name}`} className="text-green-700">
                         + {name} created
@@ -161,7 +166,7 @@ export function VersionsPanel() {
                 )}
               </div>
             )}
-          </li>
+          </Card>
         ))}
       </ul>
     </div>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ColumnType, NamingRuleSet } from "@modelforge/schema-engine";
+import { Button, Card, Input, Select, Tabs } from "@modelforge/ui";
 import { useEditorStore } from "../store/useEditorStore.js";
 
 type GovernanceTab = "domains" | "dictionary" | "naming";
@@ -17,8 +18,6 @@ const COLUMN_TYPES: ColumnType[] = [
 ];
 
 const CASE_OPTIONS: NamingRuleSet["case"][] = ["snake", "camel", "pascal", "upper", "lower"];
-
-const inputClass = "rounded border border-neutral-300 px-2 py-1 text-sm";
 
 function DomainsSection() {
   const { model, createDomain, updateDomain, deleteDomain, assignDomain, unassignDomain } =
@@ -61,56 +60,49 @@ function DomainsSection() {
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex gap-2">
-        <input
+        <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Domain name (e.g. Email)"
-          className={`${inputClass} flex-1`}
+          className="flex-1"
         />
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value as ColumnType)}
-          className={inputClass}
-        >
+        <Select value={type} onChange={(e) => setType(e.target.value as ColumnType)}>
           {COLUMN_TYPES.map((t) => (
             <option key={t} value={t}>
               {t}
             </option>
           ))}
-        </select>
-        <input
+        </Select>
+        <Input
           value={length}
           onChange={(e) => setLength(e.target.value)}
           placeholder="Length"
-          className={`${inputClass} w-20`}
+          className="w-20"
         />
-        <button
-          className="rounded bg-neutral-800 px-3 py-1 text-sm text-white"
-          onClick={handleCreate}
-        >
+        <Button variant="secondary" size="sm" onClick={handleCreate}>
           Add Domain
-        </button>
+        </Button>
       </div>
 
-      {domains.length === 0 && <p className="text-neutral-400">No domains yet.</p>}
+      {domains.length === 0 && <p className="text-sm text-slate-400">No domains yet.</p>}
 
       <ul className="flex flex-col gap-2">
         {domains.map((domain) => {
           const assigned = attributeOptions.filter((a) => a.domainId === domain.id);
           const unassigned = attributeOptions.filter((a) => a.domainId !== domain.id);
           return (
-            <li key={domain.id} className="rounded border border-neutral-200 p-2">
+            <Card key={domain.id} as="li" className="p-3">
               <div className="flex items-center gap-2">
-                <span className="font-medium">{domain.name}</span>
-                <span className="text-neutral-500">
+                <span className="font-medium text-slate-900">{domain.name}</span>
+                <span className="text-sm text-slate-500">
                   {domain.type}
                   {domain.length !== undefined && `(${domain.length})`}
                 </span>
-                <input
+                <Input
                   type="number"
                   defaultValue={domain.length ?? ""}
                   placeholder="length"
-                  className={`${inputClass} w-20`}
+                  className="w-20"
                   onBlur={(e) =>
                     updateDomain(domain.id, {
                       length: e.target.value ? Number(e.target.value) : undefined,
@@ -118,7 +110,7 @@ function DomainsSection() {
                   }
                 />
                 <button
-                  className="ml-auto text-red-600 hover:underline"
+                  className="ml-auto text-sm text-red-600 hover:underline"
                   onClick={() => deleteDomain(domain.id)}
                 >
                   Delete
@@ -126,10 +118,10 @@ function DomainsSection() {
               </div>
 
               {assigned.length > 0 && (
-                <ul className="ml-4 mt-1 text-xs text-neutral-600">
+                <ul className="ml-4 mt-2 flex flex-col gap-1 text-xs text-slate-600">
                   {assigned.map((a) => (
-                    <li key={`${a.entityId}.${a.attributeId}`}>
-                      {a.label}{" "}
+                    <li key={`${a.entityId}.${a.attributeId}`} className="flex items-center gap-2">
+                      {a.label}
                       <button
                         className="text-red-600 hover:underline"
                         onClick={() => unassignDomain(a.entityId, a.attributeId)}
@@ -142,9 +134,8 @@ function DomainsSection() {
               )}
 
               {unassigned.length > 0 && (
-                <div className="ml-4 mt-1 flex items-center gap-2">
-                  <select
-                    className={inputClass}
+                <div className="ml-4 mt-2 flex items-center gap-2">
+                  <Select
                     value={assignTarget[domain.id] ?? ""}
                     onChange={(e) =>
                       setAssignTarget({ ...assignTarget, [domain.id]: e.target.value })
@@ -159,16 +150,16 @@ function DomainsSection() {
                         {a.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                   <button
-                    className="text-sm text-neutral-700 hover:underline"
+                    className="text-sm text-brand-700 hover:underline"
                     onClick={() => handleAssign(domain.id)}
                   >
                     Assign
                   </button>
                 </div>
               )}
-            </li>
+            </Card>
           );
         })}
       </ul>
@@ -197,45 +188,43 @@ function DictionarySection() {
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex gap-2">
-        <input
+        <Input
           value={logicalTerm}
           onChange={(e) => setLogicalTerm(e.target.value)}
           placeholder="Logical term (e.g. Identifier)"
-          className={`${inputClass} flex-1`}
+          className="flex-1"
         />
-        <input
+        <Input
           value={standardName}
           onChange={(e) => setStandardName(e.target.value)}
           placeholder="Standard name (e.g. id)"
-          className={`${inputClass} flex-1`}
+          className="flex-1"
         />
-        <button className="rounded bg-neutral-800 px-3 py-1 text-sm text-white" onClick={handleAdd}>
+        <Button variant="secondary" size="sm" onClick={handleAdd}>
           Add Term
-        </button>
+        </Button>
       </div>
 
-      {dictionary.length === 0 && <p className="text-neutral-400">No dictionary terms yet.</p>}
+      {dictionary.length === 0 && (
+        <p className="text-sm text-slate-400">No dictionary terms yet.</p>
+      )}
 
-      <ul className="flex flex-col gap-1">
+      <ul className="flex flex-col gap-2">
         {dictionary.map((entry) => (
-          <li
-            key={entry.id}
-            className="flex items-center gap-2 rounded border border-neutral-200 p-2"
-          >
-            <span>{entry.logicalTerm}</span>
-            <span className="text-neutral-400">→</span>
-            <input
+          <Card key={entry.id} as="li" className="flex items-center gap-2 p-2.5">
+            <span className="text-slate-900">{entry.logicalTerm}</span>
+            <span className="text-slate-400">→</span>
+            <Input
               defaultValue={entry.standardName}
-              className={inputClass}
               onBlur={(e) => updateDictionaryEntry(entry.id, { standardName: e.target.value })}
             />
             <button
-              className="ml-auto text-red-600 hover:underline"
+              className="ml-auto text-sm text-red-600 hover:underline"
               onClick={() => deleteDictionaryEntry(entry.id)}
             >
               Delete
             </button>
-          </li>
+          </Card>
         ))}
       </ul>
     </div>
@@ -272,16 +261,15 @@ function NamingRulesSection() {
   }
 
   return (
-    <div className="flex flex-col gap-3 p-4">
+    <div className="flex flex-col gap-4 p-4">
       {!rules && (
-        <p className="text-neutral-400">
+        <p className="text-sm text-slate-400">
           No naming rules configured yet — nothing is enforced until you save some below.
         </p>
       )}
-      <label className="flex items-center gap-2">
+      <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
         Case
-        <select
-          className={inputClass}
+        <Select
           value={caseKind}
           onChange={(e) => setCaseKind(e.target.value as NamingRuleSet["case"])}
         >
@@ -290,49 +278,38 @@ function NamingRulesSection() {
               {c}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <div className="flex gap-2">
-        <input
+        <Input
           value={entityPrefix}
           onChange={(e) => setEntityPrefix(e.target.value)}
           placeholder="Entity prefix"
-          className={inputClass}
         />
-        <input
+        <Input
           value={entitySuffix}
           onChange={(e) => setEntitySuffix(e.target.value)}
           placeholder="Entity suffix"
-          className={inputClass}
         />
-        <input
+        <Input
           value={attributePrefix}
           onChange={(e) => setAttributePrefix(e.target.value)}
           placeholder="Attribute prefix"
-          className={inputClass}
         />
-        <input
+        <Input
           value={attributeSuffix}
           onChange={(e) => setAttributeSuffix(e.target.value)}
           placeholder="Attribute suffix"
-          className={inputClass}
         />
       </div>
-      <label className="flex flex-col gap-1">
+      <label className="flex flex-col gap-1 text-sm font-medium text-slate-700">
         Reserved words (comma-separated, added on top of the built-in SQL list)
-        <input
-          value={reservedWords}
-          onChange={(e) => setReservedWords(e.target.value)}
-          className={inputClass}
-        />
+        <Input value={reservedWords} onChange={(e) => setReservedWords(e.target.value)} />
       </label>
-      <div className="flex gap-2">
-        <button
-          className="rounded bg-neutral-800 px-3 py-1 text-sm text-white"
-          onClick={handleSave}
-        >
+      <div className="flex items-center gap-3">
+        <Button variant="secondary" size="sm" onClick={handleSave}>
           Save Naming Rules
-        </button>
+        </Button>
         {rules && (
           <button className="text-sm text-red-600 hover:underline" onClick={handleClear}>
             Clear (disable enforcement)
@@ -348,26 +325,16 @@ export function GovernancePanel() {
 
   return (
     <div>
-      <div className="flex gap-4 border-b border-neutral-200 px-4 py-1 text-sm">
-        <button
-          className={tab === "domains" ? "font-semibold" : "text-neutral-500"}
-          onClick={() => setTab("domains")}
-        >
-          Domains
-        </button>
-        <button
-          className={tab === "dictionary" ? "font-semibold" : "text-neutral-500"}
-          onClick={() => setTab("dictionary")}
-        >
-          Dictionary
-        </button>
-        <button
-          className={tab === "naming" ? "font-semibold" : "text-neutral-500"}
-          onClick={() => setTab("naming")}
-        >
-          Naming Rules
-        </button>
-      </div>
+      <Tabs
+        items={[
+          { id: "domains", label: "Domains" },
+          { id: "dictionary", label: "Dictionary" },
+          { id: "naming", label: "Naming Rules" },
+        ]}
+        activeId={tab}
+        onChange={(id) => setTab(id as GovernanceTab)}
+        className="border-b-0 bg-slate-50"
+      />
       {tab === "domains" && <DomainsSection />}
       {tab === "dictionary" && <DictionarySection />}
       {tab === "naming" && <NamingRulesSection />}

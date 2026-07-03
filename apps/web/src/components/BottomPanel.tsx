@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { planAppwriteDeployment } from "@modelforge/deploy-engine";
 import { diffModels } from "@modelforge/diff-engine";
 import type { DeployResult } from "@modelforge/sdk";
+import { Button, Tabs } from "@modelforge/ui";
 import { useEditorStore } from "../store/useEditorStore.js";
 import { canDeploy, deployPlan } from "../lib/appwrite.js";
 import { GovernancePanel } from "./GovernancePanel.js";
@@ -45,136 +46,127 @@ export function BottomPanel() {
   }
 
   return (
-    <div className="h-48 overflow-y-auto border-t border-neutral-200 bg-white text-sm">
-      <div className="flex gap-4 border-b border-neutral-200 px-4 py-1">
-        <button
-          className={tab === "validation" ? "font-semibold" : "text-neutral-500"}
-          onClick={() => setTab("validation")}
-        >
-          Validation {issues.length > 0 && `(${issues.length})`}
-        </button>
-        <button
-          className={tab === "diff" ? "font-semibold" : "text-neutral-500"}
-          onClick={() => setTab("diff")}
-        >
-          Diff {diffCount > 0 && `(${diffCount})`}
-        </button>
-        <button
-          className={tab === "history" ? "font-semibold" : "text-neutral-500"}
-          onClick={() => setTab("history")}
-        >
-          History ({historyLog.length})
-        </button>
-        <button
-          className={tab === "deploy" ? "font-semibold" : "text-neutral-500"}
-          onClick={() => setTab("deploy")}
-        >
-          Deploy Plan ({plan.steps.length})
-        </button>
-        <button
-          className={tab === "governance" ? "font-semibold" : "text-neutral-500"}
-          onClick={() => setTab("governance")}
-        >
-          Governance
-        </button>
-        <button
-          className={tab === "versions" ? "font-semibold" : "text-neutral-500"}
-          onClick={() => setTab("versions")}
-        >
-          Versions
-        </button>
-      </div>
+    <div className="flex h-64 flex-col border-t border-slate-200 bg-white text-sm">
+      <Tabs
+        items={[
+          { id: "validation", label: "Validation", count: issues.length },
+          { id: "diff", label: "Diff", count: diffCount },
+          { id: "history", label: "History", count: historyLog.length },
+          { id: "deploy", label: "Deploy Plan", count: plan.steps.length },
+          { id: "governance", label: "Governance" },
+          { id: "versions", label: "Versions" },
+        ]}
+        activeId={tab}
+        onChange={(id) => setTab(id as Tab)}
+      />
 
-      {tab === "validation" && (
-        <ul className="p-4">
-          {issues.length === 0 && <li className="text-neutral-400">No issues.</li>}
-          {issues.map((issue, i) => (
-            <li key={i} className={issue.severity === "error" ? "text-red-600" : "text-amber-600"}>
-              [{issue.severity}] {issue.message}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {tab === "diff" && (
-        <ul className="p-4">
-          {diffCount === 0 && <li className="text-neutral-400">No changes since the last save.</li>}
-          {diff.added.map((name) => (
-            <li key={`added-${name}`} className="text-green-700">
-              + {name} created
-            </li>
-          ))}
-          {diff.removed.map((name) => (
-            <li key={`removed-${name}`} className="text-red-600">
-              - {name} deleted
-            </li>
-          ))}
-          {diff.changed.map((name) => (
-            <li key={`changed-${name}`} className="text-amber-600">
-              ~ {name} changed
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {tab === "history" && (
-        <ul className="p-4">
-          {historyLog.length === 0 && <li className="text-neutral-400">No history yet.</li>}
-          {[...historyLog].reverse().map((label, i) => {
-            const index = historyLog.length - 1 - i;
-            return (
-              <li key={index}>
-                <button className="hover:underline" onClick={() => jumpToHistory(index)}>
-                  {index + 1}. {label}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      {tab === "deploy" && (
-        <div className="p-4">
-          {canDeploy && plan.steps.length > 0 && (
-            <button
-              className="mb-2 rounded bg-red-600 px-3 py-1 text-white disabled:opacity-50"
-              onClick={() => void handleDeploy()}
-              disabled={deploying}
-            >
-              {deploying ? "Deploying…" : "Deploy to Appwrite"}
-            </button>
-          )}
-          {!canDeploy && (
-            <p className="mb-2 text-xs text-neutral-400">
-              Deploy is not configured — set VITE_APPWRITE_DEPLOY_FUNCTION_ID (see
-              functions/deploy-appwrite/README.md).
-            </p>
-          )}
-          {deployError && <p className="mb-2 text-red-600">Deploy failed: {deployError}</p>}
-          {deployResult?.failedStep && (
-            <p className="mb-2 text-red-600">
-              Stopped at "{deployResult.failedStep.step.target}": {deployResult.failedStep.error}
-            </p>
-          )}
-          {deployResult && !deployResult.failedStep && (
-            <p className="mb-2 text-green-700">
-              Deployed {deployResult.appliedSteps.length} step(s) successfully.
-            </p>
-          )}
-          <ul>
-            {plan.steps.length === 0 && <li className="text-neutral-400">Nothing to deploy.</li>}
-            {plan.steps.map((step, i) => (
-              <li key={i} className={step.destructive ? "text-red-600" : ""}>
-                {step.action}: {step.target}
-                {step.warning && <span className="text-neutral-400"> — {step.warning}</span>}
+      <div className="flex-1 overflow-y-auto">
+        {tab === "validation" && (
+          <ul className="flex flex-col gap-1 p-4">
+            {issues.length === 0 && <li className="text-slate-400">No issues.</li>}
+            {issues.map((issue, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <span
+                  className={
+                    "mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full " +
+                    (issue.severity === "error" ? "bg-red-500" : "bg-amber-500")
+                  }
+                />
+                <span className={issue.severity === "error" ? "text-red-700" : "text-amber-700"}>
+                  {issue.message}
+                </span>
               </li>
             ))}
           </ul>
-        </div>
-      )}
+        )}
 
-      {tab === "governance" && <GovernancePanel />}
-      {tab === "versions" && <VersionsPanel />}
+        {tab === "diff" && (
+          <ul className="flex flex-col gap-1 p-4">
+            {diffCount === 0 && <li className="text-slate-400">No changes since the last save.</li>}
+            {diff.added.map((name) => (
+              <li key={`added-${name}`} className="text-green-700">
+                + {name} created
+              </li>
+            ))}
+            {diff.removed.map((name) => (
+              <li key={`removed-${name}`} className="text-red-600">
+                - {name} deleted
+              </li>
+            ))}
+            {diff.changed.map((name) => (
+              <li key={`changed-${name}`} className="text-amber-600">
+                ~ {name} changed
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {tab === "history" && (
+          <ul className="flex flex-col p-2">
+            {historyLog.length === 0 && <li className="p-2 text-slate-400">No history yet.</li>}
+            {[...historyLog].reverse().map((label, i) => {
+              const index = historyLog.length - 1 - i;
+              return (
+                <li key={index}>
+                  <button
+                    className="w-full rounded px-2 py-1 text-left text-slate-700 hover:bg-slate-50"
+                    onClick={() => jumpToHistory(index)}
+                  >
+                    <span className="mr-2 text-slate-400">{index + 1}.</span>
+                    {label}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {tab === "deploy" && (
+          <div className="p-4">
+            {canDeploy && plan.steps.length > 0 && (
+              <Button
+                variant="danger"
+                size="sm"
+                className="mb-3"
+                onClick={() => void handleDeploy()}
+                disabled={deploying}
+              >
+                {deploying ? "Deploying…" : "Deploy to Appwrite"}
+              </Button>
+            )}
+            {!canDeploy && (
+              <p className="mb-3 text-xs text-slate-400">
+                Deploy is not configured — set VITE_APPWRITE_DEPLOY_FUNCTION_ID (see
+                functions/deploy-appwrite/README.md).
+              </p>
+            )}
+            {deployError && <p className="mb-3 text-red-600">Deploy failed: {deployError}</p>}
+            {deployResult?.failedStep && (
+              <p className="mb-3 text-red-600">
+                Stopped at "{deployResult.failedStep.step.target}": {deployResult.failedStep.error}
+              </p>
+            )}
+            {deployResult && !deployResult.failedStep && (
+              <p className="mb-3 text-green-700">
+                Deployed {deployResult.appliedSteps.length} step(s) successfully.
+              </p>
+            )}
+            <ul className="flex flex-col gap-1">
+              {plan.steps.length === 0 && <li className="text-slate-400">Nothing to deploy.</li>}
+              {plan.steps.map((step, i) => (
+                <li key={i} className={step.destructive ? "text-red-600" : "text-slate-700"}>
+                  <span className="font-mono text-xs text-slate-400">{step.action}</span>{" "}
+                  {step.target}
+                  {step.warning && <span className="text-slate-400"> — {step.warning}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {tab === "governance" && <GovernancePanel />}
+        {tab === "versions" && <VersionsPanel />}
+      </div>
     </div>
   );
 }
