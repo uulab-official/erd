@@ -17,3 +17,4 @@ export * from "./exporters/json.js";
 export * from "./exporters/sql.js";
 export * from "./exporters/mermaid.js";
 export * from "./generators/prisma.js";
+export * from "./generators/graphql.js";
