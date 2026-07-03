@@ -3,10 +3,12 @@ import { assignDomain } from "./attribute.js";
 import { createEntity } from "./entity.js";
 import { createDomain } from "./governance.js";
 import { createRelationship } from "./relationship.js";
+import { assignEntityToSubjectArea, createSubjectArea } from "./subjectArea.js";
 import {
   connectEntitiesCascade,
   deleteDomainCascade,
   deleteEntityCascade,
+  deleteSubjectAreaCascade,
   moveEntitiesTransaction,
   redoTransaction,
   undoTransaction,
@@ -342,5 +344,51 @@ describe("moveEntitiesTransaction", () => {
     );
     const undone = undoTransaction(model, transaction);
     expect(redoTransaction(undone, transaction)).toEqual(model);
+  });
+});
+
+describe("deleteSubjectAreaCascade", () => {
+  it("unassigns every member entity before deleting the subject area", () => {
+    const withArea = createEntity(
+      createEntity(emptyModel(), customerEntity(), "user-1").model,
+      orderEntity(),
+      "user-1",
+    ).model;
+    const created = createSubjectArea(
+      withArea,
+      { subjectArea: { id: "sa1", name: "Sales", entityIds: [] } },
+      "user-1",
+    ).model;
+    const assigned = assignEntityToSubjectArea(
+      assignEntityToSubjectArea(created, { entityId: "customer", subjectAreaId: "sa1" }, "user-1")
+        .model,
+      { entityId: "order", subjectAreaId: "sa1" },
+      "user-1",
+    ).model;
+
+    const { model, transaction } = deleteSubjectAreaCascade(assigned, "sa1", "user-1");
+    expect(model.subjectAreas).toEqual([]);
+    expect(model.entities.every((e) => e.subjectAreaId === undefined)).toBe(true);
+    expect(transaction.operations.map((o) => o.type)).toEqual([
+      "UnassignEntityFromSubjectArea",
+      "UnassignEntityFromSubjectArea",
+      "DeleteSubjectArea",
+    ]);
+  });
+
+  it("undoTransaction restores the subject area and every member atomically", () => {
+    const withArea = createEntity(emptyModel(), customerEntity(), "user-1").model;
+    const created = createSubjectArea(
+      withArea,
+      { subjectArea: { id: "sa1", name: "Sales", entityIds: [] } },
+      "user-1",
+    ).model;
+    const assigned = assignEntityToSubjectArea(
+      created,
+      { entityId: "customer", subjectAreaId: "sa1" },
+      "user-1",
+    ).model;
+    const { model, transaction } = deleteSubjectAreaCascade(assigned, "sa1", "user-1");
+    expect(undoTransaction(model, transaction)).toEqual(assigned);
   });
 });

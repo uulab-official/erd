@@ -8,6 +8,7 @@ import type {
   Index,
   NamingRuleSet,
   Relationship,
+  SubjectArea,
 } from "@modelforge/schema-engine";
 
 export interface CreateEntityPayload {
@@ -147,6 +148,28 @@ export interface UpdateNamingRuleSetPayload {
   namingRules: NamingRuleSet | undefined;
 }
 
+export interface CreateSubjectAreaPayload {
+  subjectArea: SubjectArea;
+}
+export interface UpdateSubjectAreaPayload {
+  subjectAreaId: string;
+  changes: Partial<Pick<SubjectArea, "name" | "color">>;
+}
+export interface DeleteSubjectAreaPayload {
+  subjectAreaId: string;
+}
+export interface AssignEntityToSubjectAreaPayload {
+  entityId: string;
+  subjectAreaId: string;
+}
+export interface UnassignEntityFromSubjectAreaPayload {
+  entityId: string;
+  // Only set when this payload is restoring a prior assignment (as the inverse of
+  // AssignEntityToSubjectArea/UnassignEntityFromSubjectArea) rather than performing a
+  // real user-triggered unassign, mirroring UnassignDomainPayload's `domainId`.
+  subjectAreaId?: string;
+}
+
 export interface OperationPayloadMap {
   CreateEntity: CreateEntityPayload;
   DeleteEntity: DeleteEntityPayload;
@@ -175,6 +198,11 @@ export interface OperationPayloadMap {
   UpdateDictionaryEntry: UpdateDictionaryEntryPayload;
   DeleteDictionaryEntry: DeleteDictionaryEntryPayload;
   UpdateNamingRuleSet: UpdateNamingRuleSetPayload;
+  CreateSubjectArea: CreateSubjectAreaPayload;
+  UpdateSubjectArea: UpdateSubjectAreaPayload;
+  DeleteSubjectArea: DeleteSubjectAreaPayload;
+  AssignEntityToSubjectArea: AssignEntityToSubjectAreaPayload;
+  UnassignEntityFromSubjectArea: UnassignEntityFromSubjectAreaPayload;
 }
 
 export type OperationType = keyof OperationPayloadMap;

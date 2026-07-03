@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { modelToNodes, modelToEdges } from "./ErdCanvas.js";
+import { modelToNodes, modelToEdges, modelToSubjectAreaNodes } from "./ErdCanvas.js";
 import type { Model } from "@modelforge/schema-engine";
 
 const model: Model = {
@@ -78,5 +78,43 @@ describe("modelToEdges", () => {
       relationships: [{ ...model.relationships[0]!, name: undefined }],
     };
     expect(modelToEdges(unnamedModel)[0]?.label).toBe("1 : N");
+  });
+});
+
+describe("modelToSubjectAreaNodes", () => {
+  it("skips subject areas with no members", () => {
+    const withEmptyArea: Model = {
+      ...model,
+      subjectAreas: [{ id: "sa1", name: "Empty", entityIds: [] }],
+    };
+    expect(modelToSubjectAreaNodes(withEmptyArea)).toEqual([]);
+  });
+
+  it("builds a background node sized around its member entities, tagged non-interactive", () => {
+    const withArea: Model = {
+      ...model,
+      subjectAreas: [{ id: "sa1", name: "Sales", entityIds: ["customer"], color: "#ff0000" }],
+    };
+    const [node] = modelToSubjectAreaNodes(withArea);
+    expect(node).toMatchObject({
+      id: "subject-area:sa1",
+      type: "subjectArea",
+      data: { name: "Sales", color: "#ff0000" },
+      draggable: false,
+      selectable: false,
+      connectable: false,
+      zIndex: -1,
+    });
+    // Padded bounding box around the single member at (100, 200).
+    expect(node?.position.x).toBeLessThan(100);
+    expect(node?.position.y).toBeLessThan(200);
+  });
+
+  it("drops member ids that no longer resolve to an entity instead of throwing", () => {
+    const withStaleMember: Model = {
+      ...model,
+      subjectAreas: [{ id: "sa1", name: "Sales", entityIds: ["customer", "ghost"] }],
+    };
+    expect(modelToSubjectAreaNodes(withStaleMember)).toHaveLength(1);
   });
 });

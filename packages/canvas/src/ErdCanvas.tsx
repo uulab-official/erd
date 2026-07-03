@@ -9,8 +9,9 @@ import {
   type Node,
   type NodeChange,
 } from "reactflow";
-import type { Model, Relationship } from "@modelforge/schema-engine";
+import type { Entity, Model, Relationship } from "@modelforge/schema-engine";
 import { EntityNode, type EntityNodeData } from "./EntityNode.js";
+import { SubjectAreaNode, type SubjectAreaNodeData } from "./SubjectAreaNode.js";
 import "reactflow/dist/style.css";
 
 export interface ConnectEntitiesParams {
@@ -46,7 +47,24 @@ export interface ErdCanvasProps {
   onMoveEntity?: (params: MoveEntityParams) => void;
 }
 
-const nodeTypes = { entity: EntityNode };
+const nodeTypes = { entity: EntityNode, subjectArea: SubjectAreaNode };
+
+type CanvasNode = Node<EntityNodeData> | Node<SubjectAreaNodeData>;
+
+// Rough EntityNode footprint in pixels — must track EntityNode.tsx's `w-56` (224px)
+// header/row classes closely enough for a background group box, not pixel-perfect.
+// Getting this slightly wrong just means the box has a bit of extra/missing margin.
+const ENTITY_WIDTH = 224;
+const ENTITY_HEADER_HEIGHT = 52;
+const ENTITY_ROW_HEIGHT = 28;
+const SUBJECT_AREA_PADDING = 32;
+
+function entityFootprint(entity: Entity): { width: number; height: number } {
+  return {
+    width: ENTITY_WIDTH,
+    height: ENTITY_HEADER_HEIGHT + Math.max(1, entity.attributes.length) * ENTITY_ROW_HEIGHT,
+  };
+}
 
 // Slate-400 — the same neutral used for structural borders throughout apps/web's design
 // system (see packages/ui), so edges read as part of the same visual language as the
@@ -66,6 +84,49 @@ export function modelToNodes(model: Model): Node<EntityNodeData>[] {
     position: { x: entity.ui.x, y: entity.ui.y },
     data: { entity },
   }));
+}
+
+// One background box per non-empty Subject Area, sized to bound every member Entity's
+// current position. Not draggable/selectable/connectable — it's a visual fence, not an
+// interactive element — and rendered with zIndex -1 so it always sits behind Entities
+// and edges regardless of array order.
+export function modelToSubjectAreaNodes(model: Model): Node<SubjectAreaNodeData>[] {
+  const entitiesById = new Map(model.entities.map((e) => [e.id, e]));
+  return (model.subjectAreas ?? []).flatMap((subjectArea) => {
+    const members = subjectArea.entityIds
+      .map((id) => entitiesById.get(id))
+      .filter((e): e is Entity => e !== undefined);
+    if (members.length === 0) return [];
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const entity of members) {
+      const { width, height } = entityFootprint(entity);
+      minX = Math.min(minX, entity.ui.x);
+      minY = Math.min(minY, entity.ui.y);
+      maxX = Math.max(maxX, entity.ui.x + width);
+      maxY = Math.max(maxY, entity.ui.y + height);
+    }
+
+    return [
+      {
+        id: `subject-area:${subjectArea.id}`,
+        type: "subjectArea",
+        position: { x: minX - SUBJECT_AREA_PADDING, y: minY - SUBJECT_AREA_PADDING },
+        style: {
+          width: maxX - minX + SUBJECT_AREA_PADDING * 2,
+          height: maxY - minY + SUBJECT_AREA_PADDING * 2,
+        },
+        data: { name: subjectArea.name, color: subjectArea.color },
+        draggable: false,
+        selectable: false,
+        connectable: false,
+        zIndex: -1,
+      },
+    ];
+  });
 }
 
 export function modelToEdges(model: Model): Edge[] {
@@ -104,24 +165,38 @@ export function ErdCanvas({
   onMoveEntity,
 }: ErdCanvasProps) {
   // Nodes are semi-controlled: the Model is the source of truth (re-synced whenever its
-  // entities change — including undo/redo, which snaps nodes back), but drags mutate
-  // this local copy frame-by-frame so movement is smooth without writing an Operation
-  // per mousemove. onNodeDragStop then reports the final position via onMoveEntity.
-  const [nodes, setNodes] = useState<Node<EntityNodeData>[]>(() => modelToNodes(model));
+  // entities or subject areas change — including undo/redo, which snaps nodes back),
+  // but drags mutate this local copy frame-by-frame so movement is smooth without
+  // writing an Operation per mousemove. onNodeDragStop then reports the final position
+  // via onMoveEntity. Subject Area boxes are recomputed in the same pass since they're
+  // sized from entity positions.
+  const buildNodes = useCallback(
+    (m: Model): CanvasNode[] => [...modelToSubjectAreaNodes(m), ...modelToNodes(m)],
+    [],
+  );
+  const [nodes, setNodes] = useState<CanvasNode[]>(() => buildNodes(model));
   useEffect(() => {
-    setNodes(modelToNodes(model));
-  }, [model.entities]);
+    setNodes(buildNodes(model));
+  }, [model.entities, model.subjectAreas, buildNodes]);
   const edges = useMemo(() => modelToEdges(model), [model.relationships]);
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) =>
-      setNodes((current) => applyNodeChanges(changes, current) as Node<EntityNodeData>[]),
+      setNodes(
+        (current) =>
+          applyNodeChanges<EntityNodeData | SubjectAreaNodeData>(
+            changes,
+            current as Node<EntityNodeData | SubjectAreaNodeData>[],
+          ) as CanvasNode[],
+      ),
     [],
   );
 
   const handleNodeDragStop = useCallback(
-    (_event: unknown, node: Node) =>
-      onMoveEntity?.({ entityId: node.id, x: node.position.x, y: node.position.y }),
+    (_event: unknown, node: Node) => {
+      if (node.type !== "entity") return;
+      onMoveEntity?.({ entityId: node.id, x: node.position.x, y: node.position.y });
+    },
     [onMoveEntity],
   );
 
@@ -139,8 +214,18 @@ export function ErdCanvas({
   );
 
   const handleNodeClick = useCallback(
-    (_event: unknown, node: Node) => onSelectEntity?.(node.id),
-    [onSelectEntity],
+    (_event: unknown, node: Node) => {
+      // Subject Area boxes sit behind Entities but are still real nodes, so a click on
+      // their exposed background (not covered by any Entity) reaches here rather than
+      // onPaneClick — treat it the same as a pane click so it closes any open Inspector.
+      if (node.type !== "entity") {
+        onSelectEntity?.(null);
+        onSelectRelationship?.(null);
+        return;
+      }
+      onSelectEntity?.(node.id);
+    },
+    [onSelectEntity, onSelectRelationship],
   );
 
   const handleEdgeClick = useCallback(

@@ -30,6 +30,11 @@ const LABELS: Record<OperationType, string> = {
   UpdateDictionaryEntry: "Update dictionary entry",
   DeleteDictionaryEntry: "Delete dictionary entry",
   UpdateNamingRuleSet: "Update naming rules",
+  CreateSubjectArea: "Create subject area",
+  UpdateSubjectArea: "Update subject area",
+  DeleteSubjectArea: "Delete subject area",
+  AssignEntityToSubjectArea: "Assign entity to subject area",
+  UnassignEntityFromSubjectArea: "Unassign entity from subject area",
 };
 
 // Human-readable label for a History Panel entry. Transactions already carry their own

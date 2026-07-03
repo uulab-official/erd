@@ -6,6 +6,7 @@ import { deleteEntity, moveEntity } from "./entity.js";
 import { deleteDomain, updateDomain } from "./governance.js";
 import { nextOperationId } from "./operation.js";
 import { createRelationship, deleteRelationship } from "./relationship.js";
+import { deleteSubjectArea, unassignEntityFromSubjectArea } from "./subjectArea.js";
 import type { UpdateDomainPayload } from "./types.js";
 
 // Compound edit: deleting an Entity that still has Relationships must remove those
@@ -108,6 +109,38 @@ export function deleteDomainCascade(
   return {
     model: currentModel,
     transaction: { id: nextOperationId(), operations, label: `Delete domain "${domainId}"` },
+  };
+}
+
+// Compound edit: deleting a Subject Area that still has Entities assigned must unassign
+// each of them first, then delete the Subject Area, as one atomically-undoable
+// Transaction — mirrors deleteDomainCascade's unassign-then-delete ordering.
+export function deleteSubjectAreaCascade(
+  model: Model,
+  subjectAreaId: string,
+  actorId: string,
+): { model: Model; transaction: Transaction } {
+  let currentModel = model;
+  const operations: Operation[] = [];
+
+  for (const entity of model.entities) {
+    if (entity.subjectAreaId !== subjectAreaId) continue;
+    const result = unassignEntityFromSubjectArea(currentModel, { entityId: entity.id }, actorId);
+    currentModel = result.model;
+    operations.push(result.operation);
+  }
+
+  const subjectAreaResult = deleteSubjectArea(currentModel, { subjectAreaId }, actorId);
+  currentModel = subjectAreaResult.model;
+  operations.push(subjectAreaResult.operation);
+
+  return {
+    model: currentModel,
+    transaction: {
+      id: nextOperationId(),
+      operations,
+      label: `Delete subject area "${subjectAreaId}"`,
+    },
   };
 }
 

@@ -12,6 +12,7 @@ export function emptyModel(): Model {
     enums: [],
     domains: [],
     dictionary: [],
+    subjectAreas: [],
   };
 }
 

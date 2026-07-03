@@ -139,6 +139,9 @@ export interface Model {
   domains?: Domain[];
   dictionary?: DictionaryEntry[];
   namingRules?: NamingRuleSet;
+  // erwin-style Subject Areas — named groups of Entities for large-diagram organization.
+  // Same optionality rationale as domains/dictionary/namingRules above.
+  subjectAreas?: SubjectArea[];
 }
 
 export interface Project {

@@ -9,12 +9,14 @@ import type {
   Model,
   NamingRuleSet,
   Relationship,
+  SubjectArea,
 } from "@modelforge/schema-engine";
 import { validateModel, type ValidationIssue } from "@modelforge/schema-engine";
 import {
   addAttribute as addAttributeOp,
   addDictionaryEntry as addDictionaryEntryOp,
   assignDomain as assignDomainOp,
+  assignEntityToSubjectArea as assignEntityToSubjectAreaOp,
   changeAttributeType as changeAttributeTypeOp,
   changeRelationshipCardinality as changeRelationshipCardinalityOp,
   changeRelationshipKind as changeRelationshipKindOp,
@@ -22,11 +24,13 @@ import {
   createDomain as createDomainOp,
   createEntity,
   createIndex as createIndexOp,
+  createSubjectArea as createSubjectAreaOp,
   deleteDictionaryEntry as deleteDictionaryEntryOp,
   deleteDomainCascade,
   deleteEntityCascade,
   deleteIndex as deleteIndexOp,
   deleteRelationship as deleteRelationshipOp,
+  deleteSubjectAreaCascade,
   describeHistoryEntry,
   moveEntitiesTransaction,
   moveEntity as moveEntityOp,
@@ -38,11 +42,14 @@ import {
   setAttributeFlags as setAttributeFlagsOp,
   setRelationshipMeta as setRelationshipMetaOp,
   unassignDomain as unassignDomainOp,
+  unassignEntityFromSubjectArea as unassignEntityFromSubjectAreaOp,
   updateDictionaryEntry as updateDictionaryEntryOp,
   updateDomainCascade,
   updateNamingRuleSet as updateNamingRuleSetOp,
+  updateSubjectArea as updateSubjectAreaOp,
   type UpdateDictionaryEntryPayload,
   type UpdateDomainPayload,
+  type UpdateSubjectAreaPayload,
 } from "@modelforge/erd-engine";
 import { getModelStore } from "../lib/appwrite.js";
 
@@ -155,6 +162,12 @@ interface EditorState {
   updateDictionaryEntry(entryId: string, changes: UpdateDictionaryEntryPayload["changes"]): void;
   deleteDictionaryEntry(entryId: string): void;
   updateNamingRuleSet(namingRules: NamingRuleSet | undefined): void;
+  // Subject Areas (erwin-style canvas grouping) — see /docs/operations.md.
+  createSubjectArea(subjectArea: SubjectArea): void;
+  updateSubjectArea(subjectAreaId: string, changes: UpdateSubjectAreaPayload["changes"]): void;
+  deleteSubjectArea(subjectAreaId: string): void;
+  assignEntityToSubjectArea(entityId: string, subjectAreaId: string): void;
+  unassignEntityFromSubjectArea(entityId: string): void;
   // Versioning (erwin "Baseline" / erdcloud version history) — snapshots live alongside
   // the Model document in ModelStore, not in this in-memory state, so they survive reloads.
   versions: VersionSummary[];
@@ -484,6 +497,48 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   updateNamingRuleSet(namingRules) {
     const { model, operation } = updateNamingRuleSetOp(get().model, { namingRules }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  createSubjectArea(subjectArea) {
+    const { model, operation } = createSubjectAreaOp(get().model, { subjectArea }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  updateSubjectArea(subjectAreaId, changes) {
+    const { model, operation } = updateSubjectAreaOp(
+      get().model,
+      { subjectAreaId, changes },
+      ACTOR_ID,
+    );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  deleteSubjectArea(subjectAreaId) {
+    const { model, transaction } = deleteSubjectAreaCascade(get().model, subjectAreaId, ACTOR_ID);
+    history.push(transaction);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  assignEntityToSubjectArea(entityId, subjectAreaId) {
+    const { model, operation } = assignEntityToSubjectAreaOp(
+      get().model,
+      { entityId, subjectAreaId },
+      ACTOR_ID,
+    );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  unassignEntityFromSubjectArea(entityId) {
+    const { model, operation } = unassignEntityFromSubjectAreaOp(
+      get().model,
+      { entityId },
+      ACTOR_ID,
+    );
     history.push(operation);
     set({ model, issues: validateModel(model), ...historyFlags() });
   },

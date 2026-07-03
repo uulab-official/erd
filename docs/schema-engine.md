@@ -32,6 +32,7 @@ interface Model {
   domains?: Domain[];
   dictionary?: DictionaryEntry[];
   namingRules?: NamingRuleSet;
+  subjectAreas?: SubjectArea[];
 }
 ```
 

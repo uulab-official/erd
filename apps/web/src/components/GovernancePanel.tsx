@@ -3,7 +3,7 @@ import type { ColumnType, NamingRuleSet } from "@modelforge/schema-engine";
 import { Button, Card, Input, Select, Tabs } from "@modelforge/ui";
 import { useEditorStore } from "../store/useEditorStore.js";
 
-type GovernanceTab = "domains" | "dictionary" | "naming";
+type GovernanceTab = "domains" | "dictionary" | "naming" | "subjectAreas";
 
 const COLUMN_TYPES: ColumnType[] = [
   "string",
@@ -320,6 +320,127 @@ function NamingRulesSection() {
   );
 }
 
+const SUBJECT_AREA_COLORS = ["#6366f1", "#f97316", "#10b981", "#ec4899", "#0ea5e9", "#eab308"];
+
+function SubjectAreasSection() {
+  const {
+    model,
+    createSubjectArea,
+    updateSubjectArea,
+    deleteSubjectArea,
+    assignEntityToSubjectArea,
+    unassignEntityFromSubjectArea,
+  } = useEditorStore();
+  const subjectAreas = model.subjectAreas ?? [];
+  const [name, setName] = useState("");
+  const [assignTarget, setAssignTarget] = useState<Record<string, string>>({});
+
+  function handleCreate() {
+    if (!name.trim()) return;
+    createSubjectArea({
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      entityIds: [],
+      color: SUBJECT_AREA_COLORS[subjectAreas.length % SUBJECT_AREA_COLORS.length],
+    });
+    setName("");
+  }
+
+  function handleAssign(subjectAreaId: string) {
+    const entityId = assignTarget[subjectAreaId];
+    if (!entityId) return;
+    assignEntityToSubjectArea(entityId, subjectAreaId);
+  }
+
+  return (
+    <div className="flex flex-col gap-3 p-4">
+      <div className="flex gap-2">
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Subject area name (e.g. Sales)"
+          className="flex-1"
+        />
+        <Button variant="secondary" size="sm" onClick={handleCreate}>
+          Add Subject Area
+        </Button>
+      </div>
+
+      {subjectAreas.length === 0 && <p className="text-sm text-slate-400">No subject areas yet.</p>}
+
+      <ul className="flex flex-col gap-2">
+        {subjectAreas.map((subjectArea) => {
+          const members = model.entities.filter((e) => e.subjectAreaId === subjectArea.id);
+          const unassigned = model.entities.filter((e) => e.subjectAreaId !== subjectArea.id);
+          return (
+            <Card key={subjectArea.id} as="li" className="p-3">
+              <div className="flex items-center gap-2">
+                <span
+                  className="h-3 w-3 shrink-0 rounded-full"
+                  style={{ backgroundColor: subjectArea.color }}
+                />
+                <Input
+                  defaultValue={subjectArea.name}
+                  className="flex-1"
+                  onBlur={(e) => updateSubjectArea(subjectArea.id, { name: e.target.value })}
+                />
+                <button
+                  className="text-sm text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={members.length > 0}
+                  title={members.length > 0 ? "Unassign every entity first" : undefined}
+                  onClick={() => deleteSubjectArea(subjectArea.id)}
+                >
+                  Delete
+                </button>
+              </div>
+
+              {members.length > 0 && (
+                <ul className="ml-5 mt-2 flex flex-col gap-1 text-xs text-slate-600">
+                  {members.map((entity) => (
+                    <li key={entity.id} className="flex items-center gap-2">
+                      {entity.logicalName}
+                      <button
+                        className="text-red-600 hover:underline"
+                        onClick={() => unassignEntityFromSubjectArea(entity.id)}
+                      >
+                        Unassign
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {unassigned.length > 0 && (
+                <div className="ml-5 mt-2 flex items-center gap-2">
+                  <Select
+                    value={assignTarget[subjectArea.id] ?? ""}
+                    onChange={(e) =>
+                      setAssignTarget({ ...assignTarget, [subjectArea.id]: e.target.value })
+                    }
+                  >
+                    <option value="">Assign entity…</option>
+                    {unassigned.map((entity) => (
+                      <option key={entity.id} value={entity.id}>
+                        {entity.logicalName}
+                      </option>
+                    ))}
+                  </Select>
+                  <button
+                    className="text-sm text-brand-700 hover:underline"
+                    onClick={() => handleAssign(subjectArea.id)}
+                  >
+                    Assign
+                  </button>
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export function GovernancePanel() {
   const [tab, setTab] = useState<GovernanceTab>("domains");
 
@@ -330,6 +451,7 @@ export function GovernancePanel() {
           { id: "domains", label: "Domains" },
           { id: "dictionary", label: "Dictionary" },
           { id: "naming", label: "Naming Rules" },
+          { id: "subjectAreas", label: "Subject Areas" },
         ]}
         activeId={tab}
         onChange={(id) => setTab(id as GovernanceTab)}
@@ -338,6 +460,7 @@ export function GovernancePanel() {
       {tab === "domains" && <DomainsSection />}
       {tab === "dictionary" && <DictionarySection />}
       {tab === "naming" && <NamingRulesSection />}
+      {tab === "subjectAreas" && <SubjectAreasSection />}
     </div>
   );
 }

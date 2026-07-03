@@ -5,6 +5,7 @@ import * as entityOps from "./entity.js";
 import * as governanceOps from "./governance.js";
 import * as indexOps from "./indexes.js";
 import * as relationshipOps from "./relationship.js";
+import * as subjectAreaOps from "./subjectArea.js";
 import type { OperationPayloadMap, OperationType } from "./types.js";
 
 export interface DispatchableOperation<K extends OperationType = OperationType> {
@@ -182,6 +183,36 @@ export function applyOperation(model: Model, op: DispatchableOperation): Model {
       return governanceOps.updateNamingRuleSet(
         model,
         op.payload as OperationPayloadMap["UpdateNamingRuleSet"],
+        REPLAY_ACTOR,
+      ).model;
+    case "CreateSubjectArea":
+      return subjectAreaOps.createSubjectArea(
+        model,
+        op.payload as OperationPayloadMap["CreateSubjectArea"],
+        REPLAY_ACTOR,
+      ).model;
+    case "UpdateSubjectArea":
+      return subjectAreaOps.updateSubjectArea(
+        model,
+        op.payload as OperationPayloadMap["UpdateSubjectArea"],
+        REPLAY_ACTOR,
+      ).model;
+    case "DeleteSubjectArea":
+      return subjectAreaOps.deleteSubjectArea(
+        model,
+        op.payload as OperationPayloadMap["DeleteSubjectArea"],
+        REPLAY_ACTOR,
+      ).model;
+    case "AssignEntityToSubjectArea":
+      return subjectAreaOps.assignEntityToSubjectArea(
+        model,
+        op.payload as OperationPayloadMap["AssignEntityToSubjectArea"],
+        REPLAY_ACTOR,
+      ).model;
+    case "UnassignEntityFromSubjectArea":
+      return subjectAreaOps.unassignEntityFromSubjectArea(
+        model,
+        op.payload as OperationPayloadMap["UnassignEntityFromSubjectArea"],
         REPLAY_ACTOR,
       ).model;
     default: {
