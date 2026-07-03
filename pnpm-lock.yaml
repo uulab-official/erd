@@ -58,6 +58,9 @@ importers:
       "@modelforge/generator":
         specifier: workspace:*
         version: link:../../packages/generator
+      "@modelforge/layout-engine":
+        specifier: workspace:*
+        version: link:../../packages/layout-engine
       "@modelforge/schema-engine":
         specifier: workspace:*
         version: link:../../packages/schema-engine

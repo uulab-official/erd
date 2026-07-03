@@ -2,7 +2,7 @@ import type { Attribute, Model, Relationship } from "@modelforge/schema-engine";
 import type { Operation, Transaction } from "@modelforge/sdk";
 import { applyInverse, applyOperation, toDispatchable } from "./apply.js";
 import { addAttribute, assignDomain, unassignDomain } from "./attribute.js";
-import { deleteEntity } from "./entity.js";
+import { deleteEntity, moveEntity } from "./entity.js";
 import { deleteDomain, updateDomain } from "./governance.js";
 import { nextOperationId } from "./operation.js";
 import { createRelationship, deleteRelationship } from "./relationship.js";
@@ -202,6 +202,37 @@ export function connectEntitiesCascade(
       operations,
       label: `Connect "${source.logicalName}" to "${target.logicalName}"`,
     },
+  };
+}
+
+// Compound edit: repositioning many entities at once (an auto-layout run) is one user
+// gesture, so it must undo as one — a single Ctrl+Z restores the entire previous
+// arrangement instead of walking back one entity at a time. Entities already at their
+// target position are skipped; ids the positions map doesn't cover are left untouched.
+export function moveEntitiesTransaction(
+  model: Model,
+  positions: Record<string, { x: number; y: number }>,
+  actorId: string,
+  label = "Auto layout",
+): { model: Model; transaction: Transaction } {
+  let currentModel = model;
+  const operations: Operation[] = [];
+
+  for (const entity of model.entities) {
+    const target = positions[entity.id];
+    if (!target || (entity.ui.x === target.x && entity.ui.y === target.y)) continue;
+    const result = moveEntity(
+      currentModel,
+      { entityId: entity.id, x: target.x, y: target.y },
+      actorId,
+    );
+    currentModel = result.model;
+    operations.push(result.operation);
+  }
+
+  return {
+    model: currentModel,
+    transaction: { id: nextOperationId(), operations, label },
   };
 }
 

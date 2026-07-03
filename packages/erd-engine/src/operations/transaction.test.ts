@@ -7,6 +7,7 @@ import {
   connectEntitiesCascade,
   deleteDomainCascade,
   deleteEntityCascade,
+  moveEntitiesTransaction,
   redoTransaction,
   undoTransaction,
   updateDomainCascade,
@@ -293,5 +294,53 @@ describe("connectEntitiesCascade", () => {
         "user-1",
       ),
     ).toThrow("composite primary key");
+  });
+});
+
+describe("moveEntitiesTransaction", () => {
+  it("moves every covered entity and undoes back to the original arrangement", () => {
+    const before = createEntity(
+      createEntity(emptyModel(), customerEntity(), "user-1").model,
+      orderEntity(),
+      "user-1",
+    ).model;
+    const { model, transaction } = moveEntitiesTransaction(
+      before,
+      { customer: { x: 100, y: 50 }, order: { x: 460, y: 50 } },
+      "user-1",
+    );
+    expect(model.entities.map((e) => e.ui)).toEqual([
+      { x: 100, y: 50 },
+      { x: 460, y: 50 },
+    ]);
+    expect(transaction.operations).toHaveLength(2);
+    expect(undoTransaction(model, transaction)).toEqual(before);
+  });
+
+  it("skips entities already at their target and ids not in the positions map", () => {
+    const before = createEntity(
+      createEntity(emptyModel(), customerEntity(), "user-1").model,
+      orderEntity(),
+      "user-1",
+    ).model;
+    // customer starts at (0,0) — same target means no Operation; order isn't covered.
+    const { model, transaction } = moveEntitiesTransaction(
+      before,
+      { customer: { x: 0, y: 0 } },
+      "user-1",
+    );
+    expect(transaction.operations).toHaveLength(0);
+    expect(model).toEqual(before);
+  });
+
+  it("redoTransaction replays the layout", () => {
+    const before = createEntity(emptyModel(), customerEntity(), "user-1").model;
+    const { model, transaction } = moveEntitiesTransaction(
+      before,
+      { customer: { x: 300, y: 200 } },
+      "user-1",
+    );
+    const undone = undoTransaction(model, transaction);
+    expect(redoTransaction(undone, transaction)).toEqual(model);
   });
 });

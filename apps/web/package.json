@@ -18,6 +18,7 @@
     "@modelforge/diff-engine": "workspace:*",
     "@modelforge/erd-engine": "workspace:*",
     "@modelforge/generator": "workspace:*",
+    "@modelforge/layout-engine": "workspace:*",
     "@modelforge/schema-engine": "workspace:*",
     "@modelforge/sdk": "workspace:*",
     "@modelforge/ui": "workspace:*",

@@ -28,6 +28,7 @@ import {
   deleteIndex as deleteIndexOp,
   deleteRelationship as deleteRelationshipOp,
   describeHistoryEntry,
+  moveEntitiesTransaction,
   moveEntity as moveEntityOp,
   OperationHistory,
   removeAttribute as removeAttributeOp,
@@ -85,6 +86,10 @@ interface EditorState {
   // change (React Flow can fire drag-stop for a zero-movement click) so the undo
   // history never fills with junk MoveEntity entries.
   moveEntity(entityId: string, x: number, y: number): void;
+  // Applies a LayoutEngine result (entityId -> position) as one Transaction, so a whole
+  // auto-layout run undoes with a single Ctrl+Z. Skips pushing anything when the layout
+  // wouldn't move any entity.
+  applyLayout(positions: Record<string, { x: number; y: number }>, label: string): void;
   // Draws a Relationship from a Canvas drag between two entities' Handles — creates a
   // foreign key Attribute on the target (mirroring the source's primary key) and the
   // Relationship together. Throws if the source has no single-column primary key to
@@ -233,6 +238,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (!entity || (entity.ui.x === x && entity.ui.y === y)) return;
     const { model, operation } = moveEntityOp(get().model, { entityId, x, y }, ACTOR_ID);
     history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  applyLayout(positions, label) {
+    const { model, transaction } = moveEntitiesTransaction(get().model, positions, ACTOR_ID, label);
+    if (transaction.operations.length === 0) return;
+    history.push(transaction);
     set({ model, issues: validateModel(model), ...historyFlags() });
   },
 

@@ -1,6 +1,8 @@
-// LayoutEngine implementations (ELK.js/Dagre backed). See /docs/plugins.md.
+// LayoutEngine implementations. See /docs/plugins.md.
 import type { Model } from "@modelforge/schema-engine";
 import type { LayoutEngine } from "@modelforge/sdk";
+
+export { layeredLayoutEngine } from "./layered.js";
 
 // Placeholder grid layout so the interface has one concrete, testable implementation
 // until the ELK.js/Dagre-backed engines land.

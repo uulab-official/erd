@@ -5,6 +5,7 @@ import { useAuthStore } from "../store/useAuthStore.js";
 import { useNavigationStore } from "../store/useNavigationStore.js";
 import { downloadExport, exporters } from "../lib/exporters.js";
 import { downloadGenerated, generators } from "../lib/generators.js";
+import { layoutEngines } from "../lib/layouts.js";
 import { importAppwriteJsonFile } from "../lib/importAppwrite.js";
 import { canDeploy, importLiveAppwriteSchema } from "../lib/appwrite.js";
 
@@ -19,7 +20,7 @@ export function Toolbar() {
   const [importError, setImportError] = useState<string | null>(null);
   const [importingLive, setImportingLive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { model, canUndo, canRedo, saving, addEntity, undo, redo, save, importModel } =
+  const { model, canUndo, canRedo, saving, addEntity, undo, redo, save, importModel, applyLayout } =
     useEditorStore();
   const { user, logout } = useAuthStore();
   const closeModel = useNavigationStore((state) => state.closeModel);
@@ -60,6 +61,13 @@ export function Toolbar() {
     } finally {
       setGenerating(false);
     }
+  }
+
+  async function handleLayout(engineId: string) {
+    const engine = layoutEngines.find((l) => l.id === engineId);
+    if (!engine) return;
+    const positions = await engine.layout(model);
+    applyLayout(positions, `Layout: ${engine.label}`);
   }
 
   async function handleImportFile(file: File | undefined) {
@@ -119,6 +127,18 @@ export function Toolbar() {
       <Button variant="ghost" size="sm" onClick={redo} disabled={!canRedo}>
         Redo
       </Button>
+
+      <Divider />
+      <Select value="" onChange={(e) => e.target.value && void handleLayout(e.target.value)}>
+        <option value="" disabled>
+          Layout…
+        </option>
+        {layoutEngines.map((engine) => (
+          <option key={engine.id} value={engine.id}>
+            {engine.label}
+          </option>
+        ))}
+      </Select>
 
       <Divider />
       <input
