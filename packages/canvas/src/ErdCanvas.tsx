@@ -22,6 +22,9 @@ export interface ErdCanvasProps {
   // caller decides what Relationship (if any) that should create; the Canvas itself has
   // no opinion beyond "these two entities got connected."
   onConnectEntities?: (params: ConnectEntitiesParams) => void;
+  // Fired with an Entity's id when its node is clicked, or null when the empty canvas
+  // (the "pane") is clicked — the latter is how callers know to close an Inspector panel.
+  onSelectEntity?: (entityId: string | null) => void;
 }
 
 const nodeTypes = { entity: EntityNode };
@@ -74,7 +77,7 @@ export function modelToEdges(model: Model): Edge[] {
 
 // Renders one EntityNode per Entity at its stored ui position, with a styled edge per
 // Relationship (see modelToEdges for what the styling communicates).
-export function ErdCanvas({ model, onConnectEntities }: ErdCanvasProps) {
+export function ErdCanvas({ model, onConnectEntities, onSelectEntity }: ErdCanvasProps) {
   const nodes = useMemo(() => modelToNodes(model), [model.entities]);
   const edges = useMemo(() => modelToEdges(model), [model.relationships]);
 
@@ -91,6 +94,13 @@ export function ErdCanvas({ model, onConnectEntities }: ErdCanvasProps) {
     [onConnectEntities],
   );
 
+  const handleNodeClick = useCallback(
+    (_event: unknown, node: Node) => onSelectEntity?.(node.id),
+    [onSelectEntity],
+  );
+
+  const handlePaneClick = useCallback(() => onSelectEntity?.(null), [onSelectEntity]);
+
   return (
     <ReactFlowProvider>
       <ReactFlow
@@ -98,6 +108,8 @@ export function ErdCanvas({ model, onConnectEntities }: ErdCanvasProps) {
         edges={edges}
         nodeTypes={nodeTypes}
         onConnect={handleConnect}
+        onNodeClick={handleNodeClick}
+        onPaneClick={handlePaneClick}
         fitView
       />
     </ReactFlowProvider>

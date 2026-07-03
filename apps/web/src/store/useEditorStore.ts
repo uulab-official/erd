@@ -1,10 +1,19 @@
 import { create } from "zustand";
 import type { VersionSummary } from "@modelforge/api";
-import type { DictionaryEntry, Domain, Model, NamingRuleSet } from "@modelforge/schema-engine";
+import type {
+  Attribute,
+  ColumnType,
+  DictionaryEntry,
+  Domain,
+  Model,
+  NamingRuleSet,
+} from "@modelforge/schema-engine";
 import { validateModel, type ValidationIssue } from "@modelforge/schema-engine";
 import {
+  addAttribute as addAttributeOp,
   addDictionaryEntry as addDictionaryEntryOp,
   assignDomain as assignDomainOp,
+  changeAttributeType as changeAttributeTypeOp,
   connectEntitiesCascade,
   createDomain as createDomainOp,
   createEntity,
@@ -13,6 +22,11 @@ import {
   deleteEntityCascade,
   describeHistoryEntry,
   OperationHistory,
+  removeAttribute as removeAttributeOp,
+  renameAttribute as renameAttributeOp,
+  renameEntity as renameEntityOp,
+  setAttributeDefault as setAttributeDefaultOp,
+  setAttributeFlags as setAttributeFlagsOp,
   unassignDomain as unassignDomainOp,
   updateDictionaryEntry as updateDictionaryEntryOp,
   updateDomainCascade,
@@ -63,6 +77,30 @@ interface EditorState {
   // Relationship together. Throws if the source has no single-column primary key to
   // reference; callers (the Canvas) are expected to surface that to the user.
   connectEntities(sourceEntityId: string, targetEntityId: string): void;
+  // Entity/Attribute Inspector — see components/EntityInspector.tsx. These all wrap
+  // single erd-engine Operations, following the same push-then-set pattern as every
+  // other action here.
+  renameEntity(entityId: string, changes: { logicalName?: string; physicalName?: string }): void;
+  addAttribute(entityId: string, attribute: Attribute): void;
+  removeAttribute(entityId: string, attributeId: string): void;
+  renameAttribute(
+    entityId: string,
+    attributeId: string,
+    changes: { name?: string; logicalName?: string },
+  ): void;
+  changeAttributeType(
+    entityId: string,
+    attributeId: string,
+    type: ColumnType,
+    length?: number,
+    scale?: number,
+  ): void;
+  setAttributeFlags(
+    entityId: string,
+    attributeId: string,
+    flags: Partial<Pick<Attribute, "nullable" | "isPrimaryKey" | "isForeignKey" | "isUnique">>,
+  ): void;
+  setAttributeDefault(entityId: string, attributeId: string, value: Attribute["default"]): void;
   undo(): void;
   redo(): void;
   jumpToHistory(index: number): void;
@@ -176,6 +214,68 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       ACTOR_ID,
     );
     history.push(transaction);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  renameEntity(entityId, changes) {
+    const { model, operation } = renameEntityOp(get().model, { entityId, ...changes }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  addAttribute(entityId, attribute) {
+    const { model, operation } = addAttributeOp(get().model, { entityId, attribute }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  removeAttribute(entityId, attributeId) {
+    const { model, operation } = removeAttributeOp(
+      get().model,
+      { entityId, attributeId },
+      ACTOR_ID,
+    );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  renameAttribute(entityId, attributeId, changes) {
+    const { model, operation } = renameAttributeOp(
+      get().model,
+      { entityId, attributeId, ...changes },
+      ACTOR_ID,
+    );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  changeAttributeType(entityId, attributeId, type, length, scale) {
+    const { model, operation } = changeAttributeTypeOp(
+      get().model,
+      { entityId, attributeId, type, length, scale },
+      ACTOR_ID,
+    );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  setAttributeFlags(entityId, attributeId, flags) {
+    const { model, operation } = setAttributeFlagsOp(
+      get().model,
+      { entityId, attributeId, flags },
+      ACTOR_ID,
+    );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  setAttributeDefault(entityId, attributeId, value) {
+    const { model, operation } = setAttributeDefaultOp(
+      get().model,
+      { entityId, attributeId, default: value },
+      ACTOR_ID,
+    );
+    history.push(operation);
     set({ model, issues: validateModel(model), ...historyFlags() });
   },
 
