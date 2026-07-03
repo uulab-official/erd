@@ -52,6 +52,7 @@ interface OperationResult {
 - `DeleteRelationship`
 - `ChangeRelationshipCardinality`
 - `ChangeRelationshipKind` (identifying / non-identifying)
+- `SetRelationshipMeta` (name/optionality/onDelete/onUpdate — `SetEntityMeta`처럼 payload에 담긴 키만 바꾸고, inverse도 그 키들의 이전 값만 담는다)
 
 ### Index / Enum / Sequence / View
 

@@ -136,6 +136,12 @@ export function applyOperation(model: Model, op: DispatchableOperation): Model {
         op.payload as OperationPayloadMap["ChangeRelationshipKind"],
         REPLAY_ACTOR,
       ).model;
+    case "SetRelationshipMeta":
+      return relationshipOps.setRelationshipMeta(
+        model,
+        op.payload as OperationPayloadMap["SetRelationshipMeta"],
+        REPLAY_ACTOR,
+      ).model;
     case "CreateDomain":
       return governanceOps.createDomain(
         model,

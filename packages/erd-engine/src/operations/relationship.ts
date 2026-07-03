@@ -4,6 +4,7 @@ import type {
   ChangeRelationshipCardinalityPayload,
   ChangeRelationshipKindPayload,
   DeleteRelationshipPayload,
+  SetRelationshipMetaPayload,
 } from "./types.js";
 
 export interface RelationshipOpResult<
@@ -11,7 +12,8 @@ export interface RelationshipOpResult<
     | "CreateRelationship"
     | "DeleteRelationship"
     | "ChangeRelationshipCardinality"
-    | "ChangeRelationshipKind",
+    | "ChangeRelationshipKind"
+    | "SetRelationshipMeta",
 > {
   model: Model;
   operation: TypedOperation<K>;
@@ -116,5 +118,32 @@ export function changeRelationshipKind(
     kind: relationship.kind,
   });
   const operation = buildOperation("ChangeRelationshipKind", model.id, payload, inverse, actorId);
+  return { model: nextModel, operation };
+}
+
+// Name/optionality/FK-action edits share one Operation, mirroring SetEntityMeta: the
+// inverse captures only the keys the payload touched, so undo restores exactly those
+// fields (including restoring `undefined` for a key that was previously unset).
+export function setRelationshipMeta(
+  model: Model,
+  payload: SetRelationshipMetaPayload,
+  actorId: string,
+): RelationshipOpResult<"SetRelationshipMeta"> {
+  const relationship = requireRelationship(model, payload.relationshipId);
+  const previousMeta: SetRelationshipMetaPayload["meta"] = {};
+  for (const key of Object.keys(payload.meta) as (keyof typeof payload.meta)[]) {
+    (previousMeta as Record<string, unknown>)[key] = relationship[key];
+  }
+  const nextModel: Model = {
+    ...model,
+    relationships: model.relationships.map((r) =>
+      r.id === relationship.id ? { ...r, ...payload.meta } : r,
+    ),
+  };
+  const inverse = inverseOf("SetRelationshipMeta", {
+    relationshipId: relationship.id,
+    meta: previousMeta,
+  });
+  const operation = buildOperation("SetRelationshipMeta", model.id, payload, inverse, actorId);
   return { model: nextModel, operation };
 }

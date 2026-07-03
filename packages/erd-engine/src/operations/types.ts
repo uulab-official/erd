@@ -111,6 +111,10 @@ export interface ChangeRelationshipKindPayload {
   relationshipId: string;
   kind: Relationship["kind"];
 }
+export interface SetRelationshipMetaPayload {
+  relationshipId: string;
+  meta: Partial<Pick<Relationship, "name" | "optionality" | "onDelete" | "onUpdate">>;
+}
 
 export interface CreateDomainPayload {
   domain: Domain;
@@ -163,6 +167,7 @@ export interface OperationPayloadMap {
   DeleteRelationship: DeleteRelationshipPayload;
   ChangeRelationshipCardinality: ChangeRelationshipCardinalityPayload;
   ChangeRelationshipKind: ChangeRelationshipKindPayload;
+  SetRelationshipMeta: SetRelationshipMetaPayload;
   CreateDomain: CreateDomainPayload;
   UpdateDomain: UpdateDomainPayload;
   DeleteDomain: DeleteDomainPayload;

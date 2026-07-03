@@ -8,6 +8,7 @@ import type {
   Index,
   Model,
   NamingRuleSet,
+  Relationship,
 } from "@modelforge/schema-engine";
 import { validateModel, type ValidationIssue } from "@modelforge/schema-engine";
 import {
@@ -15,6 +16,8 @@ import {
   addDictionaryEntry as addDictionaryEntryOp,
   assignDomain as assignDomainOp,
   changeAttributeType as changeAttributeTypeOp,
+  changeRelationshipCardinality as changeRelationshipCardinalityOp,
+  changeRelationshipKind as changeRelationshipKindOp,
   connectEntitiesCascade,
   createDomain as createDomainOp,
   createEntity,
@@ -23,6 +26,7 @@ import {
   deleteDomainCascade,
   deleteEntityCascade,
   deleteIndex as deleteIndexOp,
+  deleteRelationship as deleteRelationshipOp,
   describeHistoryEntry,
   OperationHistory,
   removeAttribute as removeAttributeOp,
@@ -30,6 +34,7 @@ import {
   renameEntity as renameEntityOp,
   setAttributeDefault as setAttributeDefaultOp,
   setAttributeFlags as setAttributeFlagsOp,
+  setRelationshipMeta as setRelationshipMetaOp,
   unassignDomain as unassignDomainOp,
   updateDictionaryEntry as updateDictionaryEntryOp,
   updateDomainCascade,
@@ -106,6 +111,17 @@ interface EditorState {
   setAttributeDefault(entityId: string, attributeId: string, value: Attribute["default"]): void;
   createIndex(entityId: string, index: Index): void;
   deleteIndex(entityId: string, indexId: string): void;
+  // Relationship Inspector — see components/RelationshipInspector.tsx.
+  changeRelationshipCardinality(
+    relationshipId: string,
+    cardinality: Relationship["cardinality"],
+  ): void;
+  changeRelationshipKind(relationshipId: string, kind: Relationship["kind"]): void;
+  setRelationshipMeta(
+    relationshipId: string,
+    meta: Partial<Pick<Relationship, "name" | "optionality" | "onDelete" | "onUpdate">>,
+  ): void;
+  deleteRelationship(relationshipId: string): void;
   undo(): void;
   redo(): void;
   jumpToHistory(index: number): void;
@@ -292,6 +308,42 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   deleteIndex(entityId, indexId) {
     const { model, operation } = deleteIndexOp(get().model, { entityId, indexId }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  changeRelationshipCardinality(relationshipId, cardinality) {
+    const { model, operation } = changeRelationshipCardinalityOp(
+      get().model,
+      { relationshipId, cardinality },
+      ACTOR_ID,
+    );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  changeRelationshipKind(relationshipId, kind) {
+    const { model, operation } = changeRelationshipKindOp(
+      get().model,
+      { relationshipId, kind },
+      ACTOR_ID,
+    );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  setRelationshipMeta(relationshipId, meta) {
+    const { model, operation } = setRelationshipMetaOp(
+      get().model,
+      { relationshipId, meta },
+      ACTOR_ID,
+    );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  deleteRelationship(relationshipId) {
+    const { model, operation } = deleteRelationshipOp(get().model, { relationshipId }, ACTOR_ID);
     history.push(operation);
     set({ model, issues: validateModel(model), ...historyFlags() });
   },

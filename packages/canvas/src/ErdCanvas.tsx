@@ -25,6 +25,12 @@ export interface ErdCanvasProps {
   // Fired with an Entity's id when its node is clicked, or null when the empty canvas
   // (the "pane") is clicked — the latter is how callers know to close an Inspector panel.
   onSelectEntity?: (entityId: string | null) => void;
+  // Same contract for Relationship edges: the edge's id on click, null on pane click.
+  // Edge ids ARE Relationship ids (see modelToEdges), so callers can look the model up
+  // directly. A node click does NOT fire this with null — callers deciding "entity vs
+  // relationship inspector" should treat the two selections as mutually exclusive
+  // themselves (see apps/web's useSelectionStore).
+  onSelectRelationship?: (relationshipId: string | null) => void;
 }
 
 const nodeTypes = { entity: EntityNode };
@@ -77,7 +83,12 @@ export function modelToEdges(model: Model): Edge[] {
 
 // Renders one EntityNode per Entity at its stored ui position, with a styled edge per
 // Relationship (see modelToEdges for what the styling communicates).
-export function ErdCanvas({ model, onConnectEntities, onSelectEntity }: ErdCanvasProps) {
+export function ErdCanvas({
+  model,
+  onConnectEntities,
+  onSelectEntity,
+  onSelectRelationship,
+}: ErdCanvasProps) {
   const nodes = useMemo(() => modelToNodes(model), [model.entities]);
   const edges = useMemo(() => modelToEdges(model), [model.relationships]);
 
@@ -99,7 +110,15 @@ export function ErdCanvas({ model, onConnectEntities, onSelectEntity }: ErdCanva
     [onSelectEntity],
   );
 
-  const handlePaneClick = useCallback(() => onSelectEntity?.(null), [onSelectEntity]);
+  const handleEdgeClick = useCallback(
+    (_event: unknown, edge: Edge) => onSelectRelationship?.(edge.id),
+    [onSelectRelationship],
+  );
+
+  const handlePaneClick = useCallback(() => {
+    onSelectEntity?.(null);
+    onSelectRelationship?.(null);
+  }, [onSelectEntity, onSelectRelationship]);
 
   return (
     <ReactFlowProvider>
@@ -109,6 +128,7 @@ export function ErdCanvas({ model, onConnectEntities, onSelectEntity }: ErdCanva
         nodeTypes={nodeTypes}
         onConnect={handleConnect}
         onNodeClick={handleNodeClick}
+        onEdgeClick={handleEdgeClick}
         onPaneClick={handlePaneClick}
         fitView
       />

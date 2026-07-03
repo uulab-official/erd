@@ -2,13 +2,16 @@ import { ErdCanvas } from "@modelforge/canvas";
 import { Toolbar } from "./Toolbar.js";
 import { BottomPanel } from "./BottomPanel.js";
 import { EntityInspector } from "./EntityInspector.js";
+import { RelationshipInspector } from "./RelationshipInspector.js";
 import { useEditorStore } from "../store/useEditorStore.js";
 import { useSelectionStore } from "../store/useSelectionStore.js";
 
 export function Workspace() {
   const { model, connectEntities } = useEditorStore();
   const selectedEntityId = useSelectionStore((state) => state.selectedEntityId);
+  const selectedRelationshipId = useSelectionStore((state) => state.selectedRelationshipId);
   const selectEntity = useSelectionStore((state) => state.selectEntity);
+  const selectRelationship = useSelectionStore((state) => state.selectRelationship);
 
   function handleConnectEntities(params: { sourceEntityId: string; targetEntityId: string }) {
     try {
@@ -27,9 +30,11 @@ export function Workspace() {
             model={model}
             onConnectEntities={handleConnectEntities}
             onSelectEntity={selectEntity}
+            onSelectRelationship={selectRelationship}
           />
         </main>
         {selectedEntityId && <EntityInspector />}
+        {selectedRelationshipId && <RelationshipInspector />}
       </div>
       <BottomPanel />
     </div>

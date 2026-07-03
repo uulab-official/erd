@@ -22,6 +22,7 @@ const LABELS: Record<OperationType, string> = {
   DeleteRelationship: "Delete relationship",
   ChangeRelationshipCardinality: "Change relationship cardinality",
   ChangeRelationshipKind: "Change relationship kind",
+  SetRelationshipMeta: "Update relationship metadata",
   CreateDomain: "Create domain",
   UpdateDomain: "Update domain",
   DeleteDomain: "Delete domain",

@@ -4,6 +4,7 @@ import {
   changeRelationshipKind,
   createRelationship,
   deleteRelationship,
+  setRelationshipMeta,
 } from "./relationship.js";
 import { createEntity } from "./entity.js";
 import { applyInverse } from "./apply.js";
@@ -78,5 +79,46 @@ describe("changeRelationshipCardinality / changeRelationshipKind", () => {
     );
     expect(model.relationships[0]?.kind).toBe("identifying");
     expect(applyInverse(model, operation)).toEqual(created.model);
+  });
+});
+
+describe("setRelationshipMeta", () => {
+  it("updates name/optionality and its inverse restores them", () => {
+    const created = createRelationship(baseModel(), placesRelationship(), "user-1");
+    const { model, operation } = setRelationshipMeta(
+      created.model,
+      { relationshipId: "r1", meta: { name: "submits", optionality: "optional" } },
+      "user-1",
+    );
+    expect(model.relationships[0]?.name).toBe("submits");
+    expect(model.relationships[0]?.optionality).toBe("optional");
+    expect(applyInverse(model, operation)).toEqual(created.model);
+  });
+
+  it("only touches the keys in the payload", () => {
+    const created = createRelationship(baseModel(), placesRelationship(), "user-1");
+    const { model } = setRelationshipMeta(
+      created.model,
+      { relationshipId: "r1", meta: { onDelete: "cascade" } },
+      "user-1",
+    );
+    expect(model.relationships[0]?.onDelete).toBe("cascade");
+    expect(model.relationships[0]?.name).toBe("places");
+  });
+
+  it("its inverse restores a previously-unset key back to undefined", () => {
+    const created = createRelationship(baseModel(), placesRelationship(), "user-1");
+    const { model, operation } = setRelationshipMeta(
+      created.model,
+      { relationshipId: "r1", meta: { onDelete: "cascade" } },
+      "user-1",
+    );
+    expect(applyInverse(model, operation)).toEqual(created.model);
+  });
+
+  it("throws for an unknown relationship", () => {
+    expect(() =>
+      setRelationshipMeta(baseModel(), { relationshipId: "missing", meta: {} }, "user-1"),
+    ).toThrow();
   });
 });
