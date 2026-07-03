@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import {
   jsonExporter,
   markdownExporter,
+  mermaidExporter,
   mysqlExporter,
   renderSvg,
   sqlExporter,
@@ -87,6 +88,7 @@ export const exporters: Exporter[] = [
   pngExporter,
   pdfExporter,
   markdownExporter,
+  mermaidExporter,
   jsonExporter,
   sqlExporter,
   mysqlExporter,
@@ -98,6 +100,7 @@ const EXTENSION_BY_FORMAT: Record<string, string> = {
   png: "png",
   pdf: "pdf",
   markdown: "md",
+  mermaid: "mmd",
   json: "json",
   sql: "sql",
 };

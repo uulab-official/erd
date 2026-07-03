@@ -15,4 +15,5 @@ export * from "./exporters/svg.js";
 export * from "./exporters/markdown.js";
 export * from "./exporters/json.js";
 export * from "./exporters/sql.js";
+export * from "./exporters/mermaid.js";
 export * from "./generators/prisma.js";
