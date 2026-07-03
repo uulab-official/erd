@@ -35,6 +35,10 @@ const LABELS: Record<OperationType, string> = {
   DeleteSubjectArea: "Delete subject area",
   AssignEntityToSubjectArea: "Assign entity to subject area",
   UnassignEntityFromSubjectArea: "Unassign entity from subject area",
+  CreateMemo: "Create memo",
+  UpdateMemoText: "Update memo text",
+  MoveMemo: "Move memo",
+  DeleteMemo: "Delete memo",
 };
 
 // Human-readable label for a History Panel entry. Transactions already carry their own

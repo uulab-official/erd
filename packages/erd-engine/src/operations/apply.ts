@@ -4,6 +4,7 @@ import * as attributeOps from "./attribute.js";
 import * as entityOps from "./entity.js";
 import * as governanceOps from "./governance.js";
 import * as indexOps from "./indexes.js";
+import * as memoOps from "./memo.js";
 import * as relationshipOps from "./relationship.js";
 import * as subjectAreaOps from "./subjectArea.js";
 import type { OperationPayloadMap, OperationType } from "./types.js";
@@ -213,6 +214,27 @@ export function applyOperation(model: Model, op: DispatchableOperation): Model {
       return subjectAreaOps.unassignEntityFromSubjectArea(
         model,
         op.payload as OperationPayloadMap["UnassignEntityFromSubjectArea"],
+        REPLAY_ACTOR,
+      ).model;
+    case "CreateMemo":
+      return memoOps.createMemo(
+        model,
+        op.payload as OperationPayloadMap["CreateMemo"],
+        REPLAY_ACTOR,
+      ).model;
+    case "UpdateMemoText":
+      return memoOps.updateMemoText(
+        model,
+        op.payload as OperationPayloadMap["UpdateMemoText"],
+        REPLAY_ACTOR,
+      ).model;
+    case "MoveMemo":
+      return memoOps.moveMemo(model, op.payload as OperationPayloadMap["MoveMemo"], REPLAY_ACTOR)
+        .model;
+    case "DeleteMemo":
+      return memoOps.deleteMemo(
+        model,
+        op.payload as OperationPayloadMap["DeleteMemo"],
         REPLAY_ACTOR,
       ).model;
     default: {

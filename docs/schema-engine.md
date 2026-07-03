@@ -33,6 +33,7 @@ interface Model {
   dictionary?: DictionaryEntry[];
   namingRules?: NamingRuleSet;
   subjectAreas?: SubjectArea[];
+  memos?: Memo[];
 }
 ```
 
@@ -173,6 +174,18 @@ interface SubjectArea {
   id: string;
   name: string;
   entityIds: string[];
+  color?: string;
+}
+```
+
+## Memo
+
+```ts
+interface Memo {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
   color?: string;
 }
 ```

@@ -72,7 +72,8 @@ interface OperationResult {
 
 - `CreateSubjectArea` / `UpdateSubjectArea` (name/color) / `DeleteSubjectArea` — 구현: `packages/erd-engine/src/operations/subjectArea.ts`. Entity가 아직 배정돼 있으면 `DeleteSubjectArea`가 에러를 던진다 — `deleteSubjectAreaCascade`(transaction.ts)로 먼저 전부 해제해야 한다(`deleteDomainCascade`와 동일 패턴).
 - `AssignEntityToSubjectArea` / `UnassignEntityFromSubjectArea` — 구현 완료. Entity는 한 번에 최대 하나의 Subject Area에만 속하고(`Attribute.domainId`와 동일한 단일-소속 모델), `SubjectArea.entityIds`와 `Entity.subjectAreaId`는 이 두 Operation을 통해서만 함께 갱신되어 서로 어긋나지 않는다. `UnassignDomain`처럼 inverse가 항상 "정확한 이전 소속을 복원하는 Unassign"이다.
-- `CreateGroup` / `CreateFrame` / `CreateComment` / `CreateSticky` — 아직 미구현.
+- `CreateMemo` / `UpdateMemoText` / `MoveMemo` / `DeleteMemo` — 구현: `packages/erd-engine/src/operations/memo.ts`. 어떤 Entity에도 속하지 않는 자유 텍스트 캔버스 메모(`Model.memos?`)로, "CreateSticky"에 해당한다. Cascade가 필요 없다 — 메모를 참조하는 다른 구조가 없어서 삭제해도 다른 Operation을 유발하지 않는다.
+- `CreateGroup` / `CreateFrame` — 아직 미구현.
 
 ## Undo / Redo
 

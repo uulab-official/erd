@@ -11,6 +11,7 @@ import {
 } from "reactflow";
 import type { Entity, Model, Relationship } from "@modelforge/schema-engine";
 import { EntityNode, type EntityNodeData } from "./EntityNode.js";
+import { MemoNode, type MemoNodeData } from "./MemoNode.js";
 import { SubjectAreaNode, type SubjectAreaNodeData } from "./SubjectAreaNode.js";
 import "reactflow/dist/style.css";
 
@@ -21,6 +22,12 @@ export interface ConnectEntitiesParams {
 
 export interface MoveEntityParams {
   entityId: string;
+  x: number;
+  y: number;
+}
+
+export interface MoveMemoParams {
+  memoId: string;
   x: number;
   y: number;
 }
@@ -45,11 +52,18 @@ export interface ErdCanvasProps {
   // React Flow state (see the semi-controlled `nodes` below); the caller only needs to
   // persist the end position into the Model (e.g. as a MoveEntity Operation).
   onMoveEntity?: (params: MoveEntityParams) => void;
+  // Same drag-end contract as onMoveEntity, for freeform Memo notes.
+  onMoveMemo?: (params: MoveMemoParams) => void;
+  onUpdateMemoText?: (params: { memoId: string; text: string }) => void;
+  onDeleteMemo?: (memoId: string) => void;
 }
 
-const nodeTypes = { entity: EntityNode, subjectArea: SubjectAreaNode };
+const nodeTypes = { entity: EntityNode, subjectArea: SubjectAreaNode, memo: MemoNode };
 
-type CanvasNode = Node<EntityNodeData> | Node<SubjectAreaNodeData>;
+type CanvasNode = Node<EntityNodeData> | Node<SubjectAreaNodeData> | Node<MemoNodeData>;
+
+const MEMO_WIDTH = 180;
+const MEMO_HEIGHT = 120;
 
 // Rough EntityNode footprint in pixels — must track EntityNode.tsx's `w-56` (224px)
 // header/row classes closely enough for a background group box, not pixel-perfect.
@@ -129,6 +143,31 @@ export function modelToSubjectAreaNodes(model: Model): Node<SubjectAreaNodeData>
   });
 }
 
+// One node per Memo, with per-node onTextChange/onDelete callbacks bound to that
+// Memo's id — MemoNode edits text inline rather than through a side Inspector, so it
+// needs a direct way to report changes rather than going through the generic
+// onNodeClick/onNodeDragStop props every other node type uses.
+export function modelToMemoNodes(
+  model: Model,
+  callbacks: {
+    onUpdateMemoText?: (params: { memoId: string; text: string }) => void;
+    onDeleteMemo?: (memoId: string) => void;
+  },
+): Node<MemoNodeData>[] {
+  return (model.memos ?? []).map((memo) => ({
+    id: `memo:${memo.id}`,
+    type: "memo",
+    position: { x: memo.x, y: memo.y },
+    style: { width: MEMO_WIDTH, height: MEMO_HEIGHT },
+    data: {
+      text: memo.text,
+      color: memo.color,
+      onTextChange: (text: string) => callbacks.onUpdateMemoText?.({ memoId: memo.id, text }),
+      onDelete: () => callbacks.onDeleteMemo?.(memo.id),
+    },
+  }));
+}
+
 export function modelToEdges(model: Model): Edge[] {
   return model.relationships.map((rel) => {
     const label = rel.name
@@ -163,21 +202,28 @@ export function ErdCanvas({
   onSelectEntity,
   onSelectRelationship,
   onMoveEntity,
+  onMoveMemo,
+  onUpdateMemoText,
+  onDeleteMemo,
 }: ErdCanvasProps) {
   // Nodes are semi-controlled: the Model is the source of truth (re-synced whenever its
-  // entities or subject areas change — including undo/redo, which snaps nodes back),
-  // but drags mutate this local copy frame-by-frame so movement is smooth without
-  // writing an Operation per mousemove. onNodeDragStop then reports the final position
-  // via onMoveEntity. Subject Area boxes are recomputed in the same pass since they're
-  // sized from entity positions.
+  // entities, subject areas, or memos change — including undo/redo, which snaps nodes
+  // back), but drags mutate this local copy frame-by-frame so movement is smooth
+  // without writing an Operation per mousemove. onNodeDragStop then reports the final
+  // position via onMoveEntity/onMoveMemo. Subject Area boxes are recomputed in the same
+  // pass since they're sized from entity positions.
   const buildNodes = useCallback(
-    (m: Model): CanvasNode[] => [...modelToSubjectAreaNodes(m), ...modelToNodes(m)],
-    [],
+    (m: Model): CanvasNode[] => [
+      ...modelToSubjectAreaNodes(m),
+      ...modelToNodes(m),
+      ...modelToMemoNodes(m, { onUpdateMemoText, onDeleteMemo }),
+    ],
+    [onUpdateMemoText, onDeleteMemo],
   );
   const [nodes, setNodes] = useState<CanvasNode[]>(() => buildNodes(model));
   useEffect(() => {
     setNodes(buildNodes(model));
-  }, [model.entities, model.subjectAreas, buildNodes]);
+  }, [model.entities, model.subjectAreas, model.memos, buildNodes]);
   const edges = useMemo(() => modelToEdges(model), [model.relationships]);
 
   const handleNodesChange = useCallback(
@@ -194,10 +240,17 @@ export function ErdCanvas({
 
   const handleNodeDragStop = useCallback(
     (_event: unknown, node: Node) => {
-      if (node.type !== "entity") return;
-      onMoveEntity?.({ entityId: node.id, x: node.position.x, y: node.position.y });
+      if (node.type === "entity") {
+        onMoveEntity?.({ entityId: node.id, x: node.position.x, y: node.position.y });
+      } else if (node.type === "memo") {
+        onMoveMemo?.({
+          memoId: node.id.slice("memo:".length),
+          x: node.position.x,
+          y: node.position.y,
+        });
+      }
     },
-    [onMoveEntity],
+    [onMoveEntity, onMoveMemo],
   );
 
   const handleConnect = useCallback(

@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { modelToNodes, modelToEdges, modelToSubjectAreaNodes } from "./ErdCanvas.js";
+import { describe, expect, it, vi } from "vitest";
+import {
+  modelToNodes,
+  modelToEdges,
+  modelToMemoNodes,
+  modelToSubjectAreaNodes,
+} from "./ErdCanvas.js";
 import type { Model } from "@modelforge/schema-engine";
 
 const model: Model = {
@@ -116,5 +121,35 @@ describe("modelToSubjectAreaNodes", () => {
       subjectAreas: [{ id: "sa1", name: "Sales", entityIds: ["customer", "ghost"] }],
     };
     expect(modelToSubjectAreaNodes(withStaleMember)).toHaveLength(1);
+  });
+});
+
+describe("modelToMemoNodes", () => {
+  it("maps each memo to a prefixed node id and its position", () => {
+    const withMemo: Model = {
+      ...model,
+      memos: [{ id: "m1", text: "note", x: 50, y: 60, color: "#fff" }],
+    };
+    const [node] = modelToMemoNodes(withMemo, {});
+    expect(node).toMatchObject({
+      id: "memo:m1",
+      type: "memo",
+      position: { x: 50, y: 60 },
+      data: { text: "note", color: "#fff" },
+    });
+  });
+
+  it("binds onTextChange/onDelete callbacks to that memo's id", () => {
+    const onUpdateMemoText = vi.fn();
+    const onDeleteMemo = vi.fn();
+    const withMemo: Model = {
+      ...model,
+      memos: [{ id: "m1", text: "note", x: 0, y: 0 }],
+    };
+    const [node] = modelToMemoNodes(withMemo, { onUpdateMemoText, onDeleteMemo });
+    node?.data.onTextChange("edited");
+    node?.data.onDelete();
+    expect(onUpdateMemoText).toHaveBeenCalledWith({ memoId: "m1", text: "edited" });
+    expect(onDeleteMemo).toHaveBeenCalledWith("m1");
   });
 });

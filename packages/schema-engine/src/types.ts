@@ -123,6 +123,17 @@ export interface SubjectArea {
   color?: string;
 }
 
+// A freeform sticky note on the canvas — not attached to any Entity, purely
+// documentation (e.g. "this table gets rewritten in the v2 migration"). See
+// docs/operations.md's "Subject Area / Canvas 주석" Operation list.
+export interface Memo {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  color?: string;
+}
+
 export interface Model {
   id: string;
   name: string;
@@ -142,6 +153,7 @@ export interface Model {
   // erwin-style Subject Areas — named groups of Entities for large-diagram organization.
   // Same optionality rationale as domains/dictionary/namingRules above.
   subjectAreas?: SubjectArea[];
+  memos?: Memo[];
 }
 
 export interface Project {

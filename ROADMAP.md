@@ -40,7 +40,7 @@ Phase 구분은 [ARCHITECTURE.md#mvp-우선순위](ARCHITECTURE.md#mvp-우선순
 - [x] SQL Generator/Adapter — PostgreSQL/MySQL/SQLite 3개 dialect 전부 구현 (`SqlDialect` 공통 팩토리, DDL Export, Deploy Plan) — [PR #10](https://github.com/uulab-official/erd/pull/10), [PR #11](https://github.com/uulab-official/erd/pull/11). SQLite는 `ALTER TABLE`로 FK를 추가할 수 없어 `CREATE TABLE`에 인라인으로 넣는다(`supportsAlterForeignKey: false`) — 이미 배포된 테이블에 FK를 새로 추가/삭제하는 경우는 SQL 없이 "테이블 재생성 필요" 경고만 낸다.
 - [ ] OpenAPI/Swagger/GraphQL SDL Generator
 - [ ] 실시간 협업 (Appwrite Realtime — Cursor/Selection/Lock/Presence)
-- [ ] 댓글
+- [x] 캔버스 메모(자유 텍스트 스티키 노트) — `Model.memos?`(Domain/SubjectArea와 동일한 optional 패턴) + `CreateMemo`/`UpdateMemoText`/`MoveMemo`/`DeleteMemo` Operation(`docs/operations.md`의 "CreateSticky"에 해당). 어떤 Entity/Relationship도 참조하지 않아 cascade가 필요 없는 가장 단순한 Operation 세트. 캔버스의 `MemoNode`는 Entity/SubjectArea와 달리 사이드 Inspector 없이 노트 안에서 바로 텍스트를 편집(`textarea`, blur 시 커밋)하고 헤더 바를 드래그해 이동, ✕ 버튼으로 삭제 — 드래그·삭제 조작은 다른 노드 타입과 같은 `onNodeDragStop` 경로를 타지만, 텍스트 편집/삭제 콜백은 memo id별로 바인딩되어 노드 `data`에 직접 실려있다(제네릭 `onNodeClick` 대신). 실시간 협업(Appwrite Realtime 커서/락)이 붙기 전까지는 댓글 스레드가 아니라 이 정도의 "포스트잇"이 실용적인 최소 스코프.
 - [ ] Git 스타일 Branch/Merge/Conflict (`docs/operations.md`에 설계는 있음 — Operation 로그 기반 3-way merge 구현 필요)
 
 ## Phase 4

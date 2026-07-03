@@ -13,6 +13,7 @@ export function emptyModel(): Model {
     domains: [],
     dictionary: [],
     subjectAreas: [],
+    memos: [],
   };
 }
 

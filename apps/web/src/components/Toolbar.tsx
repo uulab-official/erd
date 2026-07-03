@@ -21,8 +21,19 @@ export function Toolbar() {
   const [importError, setImportError] = useState<string | null>(null);
   const [importingLive, setImportingLive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { model, canUndo, canRedo, saving, addEntity, undo, redo, save, importModel, applyLayout } =
-    useEditorStore();
+  const {
+    model,
+    canUndo,
+    canRedo,
+    saving,
+    addEntity,
+    undo,
+    redo,
+    save,
+    importModel,
+    applyLayout,
+    createMemo,
+  } = useEditorStore();
   const { user, logout } = useAuthStore();
   const closeModel = useNavigationStore((state) => state.closeModel);
 
@@ -40,6 +51,19 @@ export function Toolbar() {
     if (!entityName.trim()) return;
     addEntity(entityName.trim());
     setEntityName("");
+  }
+
+  function handleAddMemo() {
+    // Offset each new memo slightly so stacking several doesn't hide them under one
+    // another — a lightweight version of the cascade offset other tools use for pasted
+    // items. The user drags it wherever they actually want it.
+    const offset = ((model.memos?.length ?? 0) % 6) * 24;
+    createMemo({
+      id: crypto.randomUUID(),
+      text: "",
+      x: 40 + offset,
+      y: 40 + offset,
+    });
   }
 
   async function handleExport(exporterId: string) {
@@ -125,6 +149,9 @@ export function Toolbar() {
       />
       <Button variant="secondary" size="sm" onClick={handleAddEntity}>
         Add Entity
+      </Button>
+      <Button variant="ghost" size="sm" onClick={handleAddMemo}>
+        Add Memo
       </Button>
 
       <Divider />

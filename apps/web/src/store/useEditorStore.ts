@@ -6,6 +6,7 @@ import type {
   DictionaryEntry,
   Domain,
   Index,
+  Memo,
   Model,
   NamingRuleSet,
   Relationship,
@@ -24,16 +25,19 @@ import {
   createDomain as createDomainOp,
   createEntity,
   createIndex as createIndexOp,
+  createMemo as createMemoOp,
   createSubjectArea as createSubjectAreaOp,
   deleteDictionaryEntry as deleteDictionaryEntryOp,
   deleteDomainCascade,
   deleteEntityCascade,
   deleteIndex as deleteIndexOp,
+  deleteMemo as deleteMemoOp,
   deleteRelationship as deleteRelationshipOp,
   deleteSubjectAreaCascade,
   describeHistoryEntry,
   moveEntitiesTransaction,
   moveEntity as moveEntityOp,
+  moveMemo as moveMemoOp,
   OperationHistory,
   removeAttribute as removeAttributeOp,
   renameAttribute as renameAttributeOp,
@@ -45,6 +49,7 @@ import {
   unassignEntityFromSubjectArea as unassignEntityFromSubjectAreaOp,
   updateDictionaryEntry as updateDictionaryEntryOp,
   updateDomainCascade,
+  updateMemoText as updateMemoTextOp,
   updateNamingRuleSet as updateNamingRuleSetOp,
   updateSubjectArea as updateSubjectAreaOp,
   type UpdateDictionaryEntryPayload,
@@ -168,6 +173,11 @@ interface EditorState {
   deleteSubjectArea(subjectAreaId: string): void;
   assignEntityToSubjectArea(entityId: string, subjectAreaId: string): void;
   unassignEntityFromSubjectArea(entityId: string): void;
+  // Memos (freeform canvas sticky notes) — see components/Workspace.tsx.
+  createMemo(memo: Memo): void;
+  updateMemoText(memoId: string, text: string): void;
+  moveMemo(memoId: string, x: number, y: number): void;
+  deleteMemo(memoId: string): void;
   // Versioning (erwin "Baseline" / erdcloud version history) — snapshots live alongside
   // the Model document in ModelStore, not in this in-memory state, so they survive reloads.
   versions: VersionSummary[];
@@ -539,6 +549,32 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       { entityId },
       ACTOR_ID,
     );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  createMemo(memo) {
+    const { model, operation } = createMemoOp(get().model, { memo }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  updateMemoText(memoId, text) {
+    const { model, operation } = updateMemoTextOp(get().model, { memoId, text }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  moveMemo(memoId, x, y) {
+    const memo = (get().model.memos ?? []).find((m) => m.id === memoId);
+    if (!memo || (memo.x === x && memo.y === y)) return;
+    const { model, operation } = moveMemoOp(get().model, { memoId, x, y }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  deleteMemo(memoId) {
+    const { model, operation } = deleteMemoOp(get().model, { memoId }, ACTOR_ID);
     history.push(operation);
     set({ model, issues: validateModel(model), ...historyFlags() });
   },

@@ -6,6 +6,7 @@ import type {
   Domain,
   Entity,
   Index,
+  Memo,
   NamingRuleSet,
   Relationship,
   SubjectArea,
@@ -170,6 +171,22 @@ export interface UnassignEntityFromSubjectAreaPayload {
   subjectAreaId?: string;
 }
 
+export interface CreateMemoPayload {
+  memo: Memo;
+}
+export interface UpdateMemoTextPayload {
+  memoId: string;
+  text: string;
+}
+export interface MoveMemoPayload {
+  memoId: string;
+  x: number;
+  y: number;
+}
+export interface DeleteMemoPayload {
+  memoId: string;
+}
+
 export interface OperationPayloadMap {
   CreateEntity: CreateEntityPayload;
   DeleteEntity: DeleteEntityPayload;
@@ -203,6 +220,10 @@ export interface OperationPayloadMap {
   DeleteSubjectArea: DeleteSubjectAreaPayload;
   AssignEntityToSubjectArea: AssignEntityToSubjectAreaPayload;
   UnassignEntityFromSubjectArea: UnassignEntityFromSubjectAreaPayload;
+  CreateMemo: CreateMemoPayload;
+  UpdateMemoText: UpdateMemoTextPayload;
+  MoveMemo: MoveMemoPayload;
+  DeleteMemo: DeleteMemoPayload;
 }
 
 export type OperationType = keyof OperationPayloadMap;
