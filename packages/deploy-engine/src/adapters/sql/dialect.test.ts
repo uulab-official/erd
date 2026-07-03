@@ -23,6 +23,8 @@ describe("createPostgresDialect", () => {
     expect(dialect.mapTypeBack("uuid")).toEqual({ type: "uuid" });
     expect(dialect.mapTypeBack("integer")).toEqual({ type: "integer" });
     expect(dialect.mapTypeBack("bigint")).toEqual({ type: "bigint" });
+    expect(dialect.mapTypeBack("serial")).toEqual({ type: "integer" });
+    expect(dialect.mapTypeBack("bigserial")).toEqual({ type: "bigint" });
     expect(dialect.mapTypeBack("double precision")).toEqual({ type: "float" });
     expect(dialect.mapTypeBack("numeric(10, 2)")).toEqual({ type: "float", length: 10, scale: 2 });
     expect(dialect.mapTypeBack("boolean")).toEqual({ type: "boolean" });

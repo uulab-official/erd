@@ -71,12 +71,32 @@ export function planSqlDeployment(
           destructive: false,
         });
       } else if (JSON.stringify(existing) !== JSON.stringify(column)) {
+        const warnings = ["Narrowing an existing column's type can fail or truncate data"];
+        // The generic ALTER COLUMN ... TYPE statement below only ever carries the bare
+        // dialect type (e.g. "integer") — it can't express turning auto-increment on or
+        // off, since that's not a type change in any of the three dialects (PostgreSQL:
+        // swap the type to/from serial and wire up a sequence; MySQL: MODIFY COLUMN ...
+        // AUTO_INCREMENT; SQLite: column defs are immutable, requires rebuilding the
+        // table). Flag it rather than silently emitting a no-op-for-that-purpose ALTER,
+        // the same "don't guess, warn" policy already used for SQLite's FK ALTER
+        // limitation below.
+        if (Boolean(existing.autoIncrement) !== Boolean(column.autoIncrement)) {
+          warnings.push(
+            `Toggling auto-increment on an existing column isn't captured by this statement — apply it manually (${
+              dialect.name === "postgresql"
+                ? "create a sequence and set it as the column's default"
+                : dialect.name === "mysql"
+                  ? "ALTER TABLE ... MODIFY COLUMN ... AUTO_INCREMENT"
+                  : "SQLite requires rebuilding the table to change a column definition"
+            }).`,
+          );
+        }
         steps.push({
           action: "alter-attribute",
           target: `${table.name}.${column.name}`,
           sql: `ALTER TABLE ${q(table.name)} ALTER COLUMN ${q(column.name)} TYPE ${column.type};`,
           destructive: false,
-          warning: "Narrowing an existing column's type can fail or truncate data",
+          warning: warnings.join(" "),
         });
       }
     }

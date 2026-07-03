@@ -173,6 +173,13 @@ export function createPostgresDialect(): SqlDialect {
         return { type: "integer" };
       case "bigint":
         return { type: "bigint" };
+      // serial/bigserial are sugar for integer/bigint + an implicit sequence+default —
+      // the auto-increment-ness itself is re-derived from isPrimaryKey+no-default when
+      // this round-trips back through toNativeSchema, not carried as its own flag here.
+      case "serial":
+        return { type: "integer" };
+      case "bigserial":
+        return { type: "bigint" };
       case "double precision":
         return { type: "float" };
       case "boolean":

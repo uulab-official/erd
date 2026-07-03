@@ -73,6 +73,53 @@ describe("planSqlDeployment", () => {
     const model = shopModel();
     expect(planSqlDeployment(model, model, dialect).steps).toEqual([]);
   });
+
+  it("warns when a column's auto-increment status changes, since the ALTER statement can't express it", () => {
+    const integerPkEntity = {
+      ...customerEntity(),
+      attributes: customerEntity().attributes.map((a) =>
+        a.isPrimaryKey ? { ...a, type: "integer" as const } : a,
+      ),
+    };
+    const deployed: Model = {
+      id: "shop",
+      name: "Shop",
+      adapter: "postgresql",
+      // Composite PK on the deployed snapshot — no column is auto-increment yet.
+      entities: [
+        {
+          ...integerPkEntity,
+          attributes: integerPkEntity.attributes.map((a) => ({ ...a, isPrimaryKey: true })),
+        },
+      ],
+      relationships: [],
+      views: [],
+      sequences: [],
+      enums: [],
+    };
+    // Current model narrows back to a sole integer PK — that column should now be
+    // auto-increment, which the plan can't express via ALTER COLUMN ... TYPE alone.
+    const current: Model = { ...deployed, entities: [integerPkEntity] };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const idStep = plan.steps.find((s) => s.target === "customer.id");
+    expect(idStep?.warning).toMatch(/auto-increment.*isn't captured/i);
+  });
+
+  it("does not add the auto-increment warning for an unrelated column change", () => {
+    const deployed = shopModel();
+    const current: Model = {
+      ...deployed,
+      entities: [
+        {
+          ...customerEntity(),
+          attributes: customerEntity().attributes.map((a) => ({ ...a, nullable: true })),
+        },
+      ],
+    };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const idStep = plan.steps.find((s) => s.target === "customer.id");
+    expect(idStep?.warning).not.toMatch(/auto-increment/i);
+  });
 });
 
 describe("rollbackSqlPlan", () => {
