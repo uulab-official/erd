@@ -5,6 +5,7 @@ import type {
   ColumnType,
   DictionaryEntry,
   Domain,
+  Index,
   Model,
   NamingRuleSet,
 } from "@modelforge/schema-engine";
@@ -17,9 +18,11 @@ import {
   connectEntitiesCascade,
   createDomain as createDomainOp,
   createEntity,
+  createIndex as createIndexOp,
   deleteDictionaryEntry as deleteDictionaryEntryOp,
   deleteDomainCascade,
   deleteEntityCascade,
+  deleteIndex as deleteIndexOp,
   describeHistoryEntry,
   OperationHistory,
   removeAttribute as removeAttributeOp,
@@ -101,6 +104,8 @@ interface EditorState {
     flags: Partial<Pick<Attribute, "nullable" | "isPrimaryKey" | "isForeignKey" | "isUnique">>,
   ): void;
   setAttributeDefault(entityId: string, attributeId: string, value: Attribute["default"]): void;
+  createIndex(entityId: string, index: Index): void;
+  deleteIndex(entityId: string, indexId: string): void;
   undo(): void;
   redo(): void;
   jumpToHistory(index: number): void;
@@ -275,6 +280,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       { entityId, attributeId, default: value },
       ACTOR_ID,
     );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  createIndex(entityId, index) {
+    const { model, operation } = createIndexOp(get().model, { entityId, index }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  deleteIndex(entityId, indexId) {
+    const { model, operation } = deleteIndexOp(get().model, { entityId, indexId }, ACTOR_ID);
     history.push(operation);
     set({ model, issues: validateModel(model), ...historyFlags() });
   },

@@ -16,6 +16,8 @@ const LABELS: Record<OperationType, string> = {
   SetAttributeDefault: "Set attribute default",
   AssignDomain: "Assign domain",
   UnassignDomain: "Unassign domain",
+  CreateIndex: "Create index",
+  DeleteIndex: "Delete index",
   CreateRelationship: "Create relationship",
   DeleteRelationship: "Delete relationship",
   ChangeRelationshipCardinality: "Change relationship cardinality",

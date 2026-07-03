@@ -34,8 +34,13 @@ export function EntityInspector() {
     setAttributeFlags,
     assignDomain,
     unassignDomain,
+    createIndex,
+    deleteIndex,
   } = useEditorStore();
   const [newAttributeName, setNewAttributeName] = useState("");
+  const [newIndexName, setNewIndexName] = useState("");
+  const [newIndexAttributeIds, setNewIndexAttributeIds] = useState<string[]>([]);
+  const [newIndexUnique, setNewIndexUnique] = useState(false);
 
   const entity = model.entities.find((e) => e.id === selectedEntityId);
   if (!entity) return null;
@@ -56,6 +61,29 @@ export function EntityInspector() {
       isUnique: false,
     });
     setNewAttributeName("");
+  }
+
+  function toggleNewIndexAttribute(attributeId: string) {
+    setNewIndexAttributeIds((ids) =>
+      ids.includes(attributeId) ? ids.filter((id) => id !== attributeId) : [...ids, attributeId],
+    );
+  }
+
+  function handleCreateIndex() {
+    if (!entity || newIndexAttributeIds.length === 0) return;
+    const attributeNames = newIndexAttributeIds.map(
+      (id) => entity.attributes.find((a) => a.id === id)?.name ?? id,
+    );
+    const name = newIndexName.trim() || `idx_${entity.physicalName}_${attributeNames.join("_")}`;
+    createIndex(entity.id, {
+      id: crypto.randomUUID(),
+      name,
+      attributeIds: newIndexAttributeIds,
+      unique: newIndexUnique,
+    });
+    setNewIndexName("");
+    setNewIndexAttributeIds([]);
+    setNewIndexUnique(false);
   }
 
   function handleDeleteEntity() {
@@ -216,6 +244,72 @@ export function EntityInspector() {
           />
           <Button variant="secondary" size="sm" onClick={handleAddAttribute}>
             Add
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 border-t border-slate-200 p-4">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Indexes</h3>
+
+        <div className="flex flex-col gap-2">
+          {entity.indexes.map((index) => (
+            <div
+              key={index.id}
+              className="flex items-start justify-between gap-2 rounded-lg border border-slate-200 p-2.5"
+            >
+              <div className="flex flex-col gap-0.5 text-xs">
+                <span className="font-mono font-medium text-slate-900">{index.name}</span>
+                <span className="text-slate-500">
+                  {index.attributeIds
+                    .map((id) => entity.attributes.find((a) => a.id === id)?.name ?? id)
+                    .join(", ")}
+                  {index.unique ? " · unique" : ""}
+                </span>
+              </div>
+              <button
+                className="text-red-600 hover:underline"
+                onClick={() => deleteIndex(entity.id, index.id)}
+                aria-label={`Delete index ${index.name}`}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-2 rounded-lg border border-dashed border-slate-300 p-2.5">
+          <Input
+            value={newIndexName}
+            onChange={(e) => setNewIndexName(e.target.value)}
+            placeholder="Index name (optional)"
+          />
+          <div className="flex flex-col gap-1 text-xs text-slate-600">
+            {entity.attributes.map((attribute) => (
+              <label key={attribute.id} className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={newIndexAttributeIds.includes(attribute.id)}
+                  onChange={() => toggleNewIndexAttribute(attribute.id)}
+                />
+                {attribute.name}
+              </label>
+            ))}
+          </div>
+          <label className="flex items-center gap-1.5 text-xs text-slate-600">
+            <input
+              type="checkbox"
+              checked={newIndexUnique}
+              onChange={(e) => setNewIndexUnique(e.target.checked)}
+            />
+            Unique
+          </label>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleCreateIndex}
+            disabled={newIndexAttributeIds.length === 0}
+          >
+            Add index
           </Button>
         </div>
       </div>

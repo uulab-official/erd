@@ -3,6 +3,7 @@ import type { Operation } from "@modelforge/sdk";
 import * as attributeOps from "./attribute.js";
 import * as entityOps from "./entity.js";
 import * as governanceOps from "./governance.js";
+import * as indexOps from "./indexes.js";
 import * as relationshipOps from "./relationship.js";
 import type { OperationPayloadMap, OperationType } from "./types.js";
 
@@ -94,6 +95,18 @@ export function applyOperation(model: Model, op: DispatchableOperation): Model {
       return attributeOps.unassignDomain(
         model,
         op.payload as OperationPayloadMap["UnassignDomain"],
+        REPLAY_ACTOR,
+      ).model;
+    case "CreateIndex":
+      return indexOps.createIndex(
+        model,
+        op.payload as OperationPayloadMap["CreateIndex"],
+        REPLAY_ACTOR,
+      ).model;
+    case "DeleteIndex":
+      return indexOps.deleteIndex(
+        model,
+        op.payload as OperationPayloadMap["DeleteIndex"],
         REPLAY_ACTOR,
       ).model;
     case "CreateRelationship": {

@@ -5,6 +5,7 @@ import type {
   DictionaryEntry,
   Domain,
   Entity,
+  Index,
   NamingRuleSet,
   Relationship,
 } from "@modelforge/schema-engine";
@@ -83,6 +84,18 @@ export interface UnassignDomainPayload {
   scale?: number;
 }
 
+export interface CreateIndexPayload {
+  entityId: string;
+  index: Index;
+  // Position within the entity's indexes array — named `position` (not `index`, unlike
+  // AddAttributePayload's `index`) since `index` here already means the Index being added.
+  position?: number;
+}
+export interface DeleteIndexPayload {
+  entityId: string;
+  indexId: string;
+}
+
 export interface CreateRelationshipPayload {
   relationship: Relationship;
   index?: number;
@@ -144,6 +157,8 @@ export interface OperationPayloadMap {
   SetAttributeDefault: SetAttributeDefaultPayload;
   AssignDomain: AssignDomainPayload;
   UnassignDomain: UnassignDomainPayload;
+  CreateIndex: CreateIndexPayload;
+  DeleteIndex: DeleteIndexPayload;
   CreateRelationship: CreateRelationshipPayload;
   DeleteRelationship: DeleteRelationshipPayload;
   ChangeRelationshipCardinality: ChangeRelationshipCardinalityPayload;
