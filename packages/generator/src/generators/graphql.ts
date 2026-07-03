@@ -21,16 +21,37 @@ function pluralize(name: string): string {
   return `${name}s`;
 }
 
+// GraphQL enum value names must match /^[_A-Za-z][_0-9A-Za-z]*$/ — real Enum values
+// (e.g. "in progress", "n/a") often aren't valid as-is. Upper-snake-cases and strips
+// anything else, which is also the SDL convention for enum values. A raw empty result
+// (all-punctuation input) falls back to a placeholder rather than emitting `: `.
+function toEnumValueName(value: string): string {
+  // Strip leading/trailing underscore artifacts BEFORE the digit-prefix check — doing it
+  // after would strip the safety underscore right back off a value like "42" -> "_42".
+  const collapsed = value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const safe = /^[0-9]/.test(collapsed) ? `_${collapsed}` : collapsed;
+  return safe || "VALUE";
+}
+
 // PK/FK columns are exposed as GraphQL's `ID` scalar regardless of their underlying
 // storage type — the same convention every GraphQL-over-SQL tool (Postgraphile, Hasura,
 // Prisma's own GraphQL layer) uses, since callers reference records by opaque id, not by
 // "this is stored as a uuid column."
-function mapScalarType(attribute: Attribute): string {
+function mapScalarType(model: Model, attribute: Attribute): string {
   if (attribute.isPrimaryKey || attribute.isForeignKey) return "ID";
-  const byColumnType: Record<ColumnType, string> = {
+  if (attribute.type === "enum") {
+    const enumType = model.enums.find((e) => e.id === attribute.enumId);
+    // No linked EnumType (or none yet) falls back to String rather than emitting a
+    // reference to a type that was never declared.
+    return enumType ? pascalCase(enumType.name) : "String";
+  }
+  const byColumnType: Record<Exclude<ColumnType, "enum">, string> = {
     string: "String",
     uuid: "ID",
-    enum: "String", // no enum-value tracking on Attribute to generate a real GraphQL enum from
     integer: "Int",
     bigint: "BigInt", // custom scalar — GraphQL's Int is 32-bit
     float: "Float",
@@ -41,16 +62,33 @@ function mapScalarType(attribute: Attribute): string {
   return byColumnType[attribute.type];
 }
 
-function renderField(attribute: Attribute): string {
-  const type = mapScalarType(attribute) + (attribute.nullable ? "" : "!");
+function renderField(model: Model, attribute: Attribute): string {
+  const type = mapScalarType(model, attribute) + (attribute.nullable ? "" : "!");
   return `  ${attribute.name}: ${type}`;
+}
+
+// One `enum` SDL block per EnumType actually referenced by some attribute — unreferenced
+// entries in Model.enums (created but never assigned) are skipped, matching the pattern
+// custom scalars use below (only declared when used).
+function renderEnumTypes(model: Model): string[] {
+  const referencedIds = new Set(
+    model.entities
+      .flatMap((e) => e.attributes.map((a) => a.enumId))
+      .filter((id): id is string => id !== undefined),
+  );
+  return model.enums
+    .filter((e) => referencedIds.has(e.id))
+    .map((enumType) => {
+      const values = enumType.values.map((v) => `  ${toEnumValueName(v)}`).join("\n");
+      return `enum ${pascalCase(enumType.name)} {\n${values}\n}`;
+    });
 }
 
 function renderType(model: Model, entity: Entity, byId: Map<string, Entity>): string {
   const lines: string[] = [`type ${pascalCase(entity.logicalName)} {`];
 
   for (const attribute of entity.attributes) {
-    lines.push(renderField(attribute));
+    lines.push(renderField(model, attribute));
   }
 
   // This entity holds the FK (it's the relation's target) — a singular reference field
@@ -120,24 +158,27 @@ function renderQueryType(model: Model): string {
 const CUSTOM_SCALARS = ["BigInt", "DateTime", "JSON"];
 
 function usedCustomScalars(model: Model): string[] {
-  const types = new Set(model.entities.flatMap((e) => e.attributes.map(mapScalarType)));
+  const types = new Set(
+    model.entities.flatMap((e) => e.attributes.map((a) => mapScalarType(model, a))),
+  );
   return CUSTOM_SCALARS.filter((scalar) => types.has(scalar));
 }
 
 // Model -> a single schema.graphql SDL document: custom scalars actually referenced,
-// one `type` per Entity, and a Query root exposing list/get per Entity. Field naming
-// mirrors the Prisma generator's conventions (pascalCase types, lowerFirst/pluralize
-// relation field names) so the two generated schemas read as the same domain model in
-// two different languages.
+// real `enum` blocks for every EnumType referenced by an attribute, one `type` per
+// Entity, and a Query root exposing list/get per Entity. Field naming mirrors the
+// Prisma generator's conventions (pascalCase types, lowerFirst/pluralize relation field
+// names) so the two generated schemas read as the same domain model in two languages.
 export function renderGraphqlSchema(model: Model): string {
   const byId = new Map(model.entities.map((e) => [e.id, e]));
   const scalars = usedCustomScalars(model);
 
   const header = scalars.map((scalar) => `scalar ${scalar}`).join("\n");
+  const enums = renderEnumTypes(model).join("\n\n");
   const types = model.entities.map((entity) => renderType(model, entity, byId)).join("\n\n");
   const query = renderQueryType(model);
 
-  return [header, types, query].filter(Boolean).join("\n\n") + "\n";
+  return [header, enums, types, query].filter(Boolean).join("\n\n") + "\n";
 }
 
 export const graphqlGenerator: CodeGenerator = {

@@ -116,6 +116,50 @@ describe("renderOpenApiSpec", () => {
   });
 });
 
+describe("renderOpenApiSpec with a real Enum", () => {
+  function modelWithEnumAttribute(): Model {
+    const model = baseModel();
+    model.enums = [{ id: "e1", name: "Status", values: ["pending", "shipped"] }];
+    model.entities[0]!.attributes.push({
+      id: "customer_status",
+      name: "status",
+      logicalName: "Status",
+      type: "enum",
+      enumId: "e1",
+      nullable: false,
+      isPrimaryKey: false,
+      isForeignKey: false,
+      isUnique: false,
+    });
+    return model;
+  }
+
+  it("lists the literal allowed values via JSON Schema's enum keyword", () => {
+    const spec = renderOpenApiSpec(modelWithEnumAttribute());
+    expect(spec.components.schemas.Customer!.properties.status).toEqual({
+      type: "string",
+      enum: ["pending", "shipped"],
+    });
+  });
+
+  it("falls back to a bare string schema when enumId doesn't resolve", () => {
+    const model = baseModel();
+    model.entities[0]!.attributes.push({
+      id: "customer_status",
+      name: "status",
+      logicalName: "Status",
+      type: "enum",
+      enumId: "missing",
+      nullable: false,
+      isPrimaryKey: false,
+      isForeignKey: false,
+      isUnique: false,
+    });
+    const spec = renderOpenApiSpec(model);
+    expect(spec.components.schemas.Customer!.properties.status).toEqual({ type: "string" });
+  });
+});
+
 describe("openapiGenerator", () => {
   it("emits a single valid-JSON openapi.json file", async () => {
     const files = await openapiGenerator.generate(baseModel());

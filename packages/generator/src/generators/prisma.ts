@@ -1,4 +1,4 @@
-import type { Attribute, ColumnType, Entity, Model, Relationship } from "@modelforge/schema-engine";
+import type { Attribute, Entity, Model, Relationship } from "@modelforge/schema-engine";
 import type { CodeGenerator, GeneratedFile } from "@modelforge/sdk";
 
 function pascalCase(name: string): string {
@@ -20,18 +20,38 @@ function pluralize(name: string): string {
   return `${name}s`;
 }
 
-function mapScalarType(type: ColumnType, scale: number | undefined): string {
-  switch (type) {
+// Prisma enum values are identifiers (letters/digits/underscore, not starting with a
+// digit) — real Enum values (e.g. "in progress", "n/a") often aren't valid as-is.
+// Upper-snake-cases and strips anything else. Order matters: the leading/trailing
+// underscore trim must run BEFORE the digit-prefix check, or a value like "42" would
+// get its safety underscore stripped right back off ("_42" -> "42").
+function toEnumValueName(value: string): string {
+  const collapsed = value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const safe = /^[0-9]/.test(collapsed) ? `_${collapsed}` : collapsed;
+  return safe || "VALUE";
+}
+
+function mapScalarType(model: Model, attr: Attribute): string {
+  if (attr.type === "enum") {
+    const enumType = model.enums.find((e) => e.id === attr.enumId);
+    // No linked EnumType (or none yet) falls back to String rather than referencing a
+    // model that was never declared.
+    return enumType ? pascalCase(enumType.name) : "String";
+  }
+  switch (attr.type) {
     case "string":
     case "uuid":
-    case "enum":
       return "String";
     case "integer":
       return "Int";
     case "bigint":
       return "BigInt";
     case "float":
-      return scale !== undefined ? "Decimal" : "Float";
+      return attr.scale !== undefined ? "Decimal" : "Float";
     case "boolean":
       return "Boolean";
     case "datetime":
@@ -39,6 +59,22 @@ function mapScalarType(type: ColumnType, scale: number | undefined): string {
     case "json":
       return "Json";
   }
+}
+
+// One `enum` block per EnumType actually referenced by some attribute — unreferenced
+// entries in Model.enums (created but never assigned) are skipped.
+function renderEnumBlocks(model: Model): string[] {
+  const referencedIds = new Set(
+    model.entities
+      .flatMap((e) => e.attributes.map((a) => a.enumId))
+      .filter((id): id is string => id !== undefined),
+  );
+  return model.enums
+    .filter((e) => referencedIds.has(e.id))
+    .map((enumType) => {
+      const values = enumType.values.map((v) => `  ${toEnumValueName(v)}`).join("\n");
+      return `enum ${pascalCase(enumType.name)} {\n${values}\n}`;
+    });
 }
 
 function formatDefaultValue(value: NonNullable<Attribute["default"]>): string {
@@ -57,7 +93,7 @@ function isOneToOneForeignKey(model: Model, entity: Entity, attr: Attribute): bo
 }
 
 function renderField(model: Model, entity: Entity, attr: Attribute): string {
-  const type = mapScalarType(attr.type, attr.scale) + (attr.nullable ? "?" : "");
+  const type = mapScalarType(model, attr) + (attr.nullable ? "?" : "");
   const modifiers: string[] = [];
   if (attr.isPrimaryKey) modifiers.push("@id");
   if (!attr.isPrimaryKey && (attr.isUnique || isOneToOneForeignKey(model, entity, attr))) {
@@ -149,7 +185,7 @@ function renderModel(
 // Relationship.name (which tends to read as a verb, e.g. "places" — fine as the
 // @relation() disambiguator, awkward as a field name). Entities with more than one
 // relation to the same target will get colliding field names — a known limitation to
-// resolve by hand, same spirit as the enum->String fallback elsewhere in this package.
+// resolve by hand.
 export function renderPrismaSchema(model: Model): string {
   const byId = new Map(model.entities.map((e) => [e.id, e]));
   const relationName = buildRelationNamer(model);
@@ -166,11 +202,12 @@ export function renderPrismaSchema(model: Model): string {
     "",
   ].join("\n");
 
+  const enums = renderEnumBlocks(model).join("\n\n");
   const models = model.entities
     .map((entity) => renderModel(model, entity, byId, relationName))
     .join("\n\n");
 
-  return `${header}\n${models}\n`;
+  return `${header}\n${[enums, models].filter(Boolean).join("\n\n")}\n`;
 }
 
 export const prismaGenerator: CodeGenerator = {

@@ -154,6 +154,62 @@ describe("renderGraphqlSchema", () => {
   });
 });
 
+describe("renderGraphqlSchema with a real Enum", () => {
+  function modelWithEnumAttribute(): Model {
+    const model = baseModel([]);
+    model.enums = [{ id: "e1", name: "order status", values: ["pending", "in progress!", "42"] }];
+    model.entities[1]!.attributes.push({
+      id: "order_status",
+      name: "status",
+      logicalName: "Status",
+      type: "enum",
+      enumId: "e1",
+      nullable: false,
+      isPrimaryKey: false,
+      isForeignKey: false,
+      isUnique: false,
+    });
+    return model;
+  }
+
+  it("emits a real enum block instead of falling back to String", () => {
+    const schema = modelWithEnumAttribute();
+    const sdl = renderGraphqlSchema(schema);
+    expect(sdl).toContain("enum OrderStatus {");
+    expect(sdl).toContain("status: OrderStatus!");
+    expect(sdl).not.toContain("status: String");
+  });
+
+  it("sanitizes enum values into valid GraphQL enum member names", () => {
+    const sdl = renderGraphqlSchema(modelWithEnumAttribute());
+    expect(sdl).toContain("PENDING");
+    expect(sdl).toContain("IN_PROGRESS"); // space and "!" collapse to underscores, trimmed at the edge
+    expect(sdl).toContain("_42"); // leading digit gets a safe prefix
+  });
+
+  it("does not declare an enum block for an EnumType nothing references", () => {
+    const model = baseModel();
+    model.enums = [{ id: "unused", name: "Unused", values: ["a"] }];
+    expect(renderGraphqlSchema(model)).not.toContain("enum Unused");
+  });
+
+  it("falls back to String when enumId doesn't resolve to a real EnumType", () => {
+    const model = baseModel([]);
+    model.entities[1]!.attributes.push({
+      id: "order_status",
+      name: "status",
+      logicalName: "Status",
+      type: "enum",
+      enumId: "missing",
+      nullable: false,
+      isPrimaryKey: false,
+      isForeignKey: false,
+      isUnique: false,
+    });
+    expect(renderGraphqlSchema(model)).toContain("status: String!");
+  });
+});
+
 describe("graphqlGenerator", () => {
   it("emits a single schema.graphql file", async () => {
     const files = await graphqlGenerator.generate(baseModel());

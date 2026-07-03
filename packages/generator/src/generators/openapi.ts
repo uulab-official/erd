@@ -21,6 +21,7 @@ export interface JsonSchemaProperty {
   format?: string;
   readOnly?: true;
   additionalProperties?: true;
+  enum?: string[];
 }
 
 export interface EntitySchema {
@@ -43,11 +44,20 @@ export interface OpenApiDocument {
   components: { schemas: Record<string, EntitySchema> };
 }
 
-function mapPropertySchema(attribute: Attribute): JsonSchemaProperty {
-  const byColumnType: Record<ColumnType, JsonSchemaProperty> = {
+function mapPropertySchema(model: Model, attribute: Attribute): JsonSchemaProperty {
+  if (attribute.type === "enum") {
+    const enumType = model.enums.find((e) => e.id === attribute.enumId);
+    // JSON Schema's `enum` keyword takes the literal allowed values — unlike GraphQL/
+    // Prisma enum member names, there's no identifier syntax to sanitize against.
+    const schema: JsonSchemaProperty = enumType
+      ? { type: "string", enum: enumType.values }
+      : { type: "string" };
+    if (attribute.isPrimaryKey) schema.readOnly = true;
+    return schema;
+  }
+  const byColumnType: Record<Exclude<ColumnType, "enum">, JsonSchemaProperty> = {
     string: { type: "string" },
     uuid: { type: "string", format: "uuid" },
-    enum: { type: "string" },
     integer: { type: "integer", format: "int32" },
     bigint: { type: "integer", format: "int64" },
     float: { type: "number", format: attribute.scale !== undefined ? "double" : "float" },
@@ -62,11 +72,11 @@ function mapPropertySchema(attribute: Attribute): JsonSchemaProperty {
   return schema;
 }
 
-function entitySchema(entity: Entity): EntitySchema {
+function entitySchema(model: Model, entity: Entity): EntitySchema {
   const properties: Record<string, JsonSchemaProperty> = {};
   const required: string[] = [];
   for (const attribute of entity.attributes) {
-    properties[attribute.name] = mapPropertySchema(attribute);
+    properties[attribute.name] = mapPropertySchema(model, attribute);
     if (!attribute.nullable) required.push(attribute.name);
   }
   return {
@@ -83,6 +93,7 @@ function entitySchema(entity: Entity): EntitySchema {
 // convention rather than a mechanical mapping, the same scoping call made for GraphQL's
 // Mutation type.
 function entityPaths(
+  model: Model,
   entity: Entity,
   schemaName: string,
 ): Record<string, Record<string, OpenApiOperation>> {
@@ -95,7 +106,7 @@ function entityPaths(
           name: primaryKey.name,
           in: "path",
           required: true,
-          schema: mapPropertySchema(primaryKey),
+          schema: mapPropertySchema(model, primaryKey),
         },
       ]
     : [];
@@ -160,8 +171,8 @@ export function renderOpenApiSpec(model: Model): OpenApiDocument {
 
   for (const entity of model.entities) {
     const schemaName = pascalCase(entity.logicalName);
-    schemas[schemaName] = entitySchema(entity);
-    Object.assign(paths, entityPaths(entity, schemaName));
+    schemas[schemaName] = entitySchema(model, entity);
+    Object.assign(paths, entityPaths(model, entity, schemaName));
   }
 
   return {

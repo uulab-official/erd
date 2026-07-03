@@ -135,6 +135,61 @@ describe("renderPrismaSchema", () => {
   });
 });
 
+describe("renderPrismaSchema with a real Enum", () => {
+  function modelWithEnumAttribute(): Model {
+    const model = baseModel([]);
+    model.enums = [{ id: "e1", name: "order status", values: ["pending", "in progress!", "42"] }];
+    model.entities[1]!.attributes.push({
+      id: "order_status",
+      name: "status",
+      logicalName: "Status",
+      type: "enum",
+      enumId: "e1",
+      nullable: false,
+      isPrimaryKey: false,
+      isForeignKey: false,
+      isUnique: false,
+    });
+    return model;
+  }
+
+  it("emits a real enum block instead of falling back to String", () => {
+    const schema = renderPrismaSchema(modelWithEnumAttribute());
+    expect(schema).toContain("enum OrderStatus {");
+    expect(schema).toContain("status OrderStatus");
+    expect(schema).not.toContain("status String");
+  });
+
+  it("sanitizes enum values into valid Prisma enum identifiers", () => {
+    const schema = renderPrismaSchema(modelWithEnumAttribute());
+    expect(schema).toContain("PENDING");
+    expect(schema).toContain("IN_PROGRESS");
+    expect(schema).toContain("_42");
+  });
+
+  it("does not declare an enum block for an EnumType nothing references", () => {
+    const model = baseModel();
+    model.enums = [{ id: "unused", name: "Unused", values: ["a"] }];
+    expect(renderPrismaSchema(model)).not.toContain("enum Unused");
+  });
+
+  it("falls back to String when enumId doesn't resolve to a real EnumType", () => {
+    const model = baseModel([]);
+    model.entities[1]!.attributes.push({
+      id: "order_status",
+      name: "status",
+      logicalName: "Status",
+      type: "enum",
+      enumId: "missing",
+      nullable: false,
+      isPrimaryKey: false,
+      isForeignKey: false,
+      isUnique: false,
+    });
+    expect(renderPrismaSchema(model)).toContain("status String");
+  });
+});
+
 describe("prismaGenerator", () => {
   it("emits a single schema.prisma file", async () => {
     const files = await prismaGenerator.generate(baseModel());
