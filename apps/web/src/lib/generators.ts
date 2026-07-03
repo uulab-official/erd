@@ -1,8 +1,8 @@
-import { graphqlGenerator, prismaGenerator } from "@modelforge/generator";
+import { graphqlGenerator, openapiGenerator, prismaGenerator } from "@modelforge/generator";
 import type { Model } from "@modelforge/schema-engine";
 import type { CodeGenerator } from "@modelforge/sdk";
 
-export const generators: CodeGenerator[] = [prismaGenerator, graphqlGenerator];
+export const generators: CodeGenerator[] = [prismaGenerator, graphqlGenerator, openapiGenerator];
 
 // CodeGenerators can emit multiple files (docs/plugins.md); download each one. Browsers
 // may prompt before allowing more than one simultaneous download — acceptable for now
