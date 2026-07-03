@@ -8,6 +8,12 @@ export interface SqlColumnDef {
   type: string; // dialect-rendered, e.g. "varchar(255)", "integer"
   nullable: boolean;
   default?: string | number | boolean | null;
+  // Set only for a sole (non-composite) integer/bigint primary key column with no
+  // explicit default — see toNativeSchema.ts. Each dialect renders this differently
+  // (PostgreSQL: serial/bigserial type; MySQL: AUTO_INCREMENT suffix; SQLite: inline
+  // "INTEGER PRIMARY KEY AUTOINCREMENT"), so the flag travels on the column rather than
+  // being resolved to dialect-specific DDL text this early.
+  autoIncrement?: boolean;
 }
 
 export interface SqlIndexDef {

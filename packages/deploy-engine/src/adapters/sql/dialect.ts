@@ -56,24 +56,55 @@ export interface SqlDialectOptions {
   quoteIdentifier(name: string): string;
   mapType: SqlDialect["mapType"];
   mapTypeBack: SqlDialect["mapTypeBack"];
+  // PostgreSQL: swaps "integer"/"bigint" for "serial"/"bigserial" on an auto-increment
+  // column instead of appending a suffix.
+  autoIncrementType?(mappedType: string): string;
+  // MySQL: appended to the column definition (" AUTO_INCREMENT").
+  autoIncrementSuffix?: string;
+  // SQLite: has no AUTO_INCREMENT/SERIAL — a sole integer PK column must instead be
+  // declared "INTEGER PRIMARY KEY AUTOINCREMENT" inline, replacing both the plain
+  // column line and the separate PRIMARY KEY (...) table constraint for that column.
+  inlinePrimaryKeyOnAutoIncrement?: boolean;
 }
 
 // Generic implementation of columnDDL/createTableDDL/createIndexDDL/foreignKeyDDL shared
 // across dialects — each dialect only supplies identifier quoting, type mapping, and
-// whether it supports ALTER TABLE ... ADD CONSTRAINT for foreign keys.
+// whether/how it supports ALTER TABLE ... ADD CONSTRAINT for foreign keys and
+// auto-increment primary keys.
 export function createSqlDialect(options: SqlDialectOptions): SqlDialect {
-  const { quoteIdentifier, supportsAlterForeignKey } = options;
+  const {
+    quoteIdentifier,
+    supportsAlterForeignKey,
+    autoIncrementType,
+    autoIncrementSuffix,
+    inlinePrimaryKeyOnAutoIncrement,
+  } = options;
 
-  const columnDDL: SqlDialect["columnDDL"] = (column) =>
-    `${quoteIdentifier(column.name)} ${column.type}${column.nullable ? "" : " NOT NULL"}${formatDefault(column.default)}`;
+  const columnDDL: SqlDialect["columnDDL"] = (column) => {
+    if (column.autoIncrement && inlinePrimaryKeyOnAutoIncrement) {
+      // SQLite: type + PRIMARY KEY + AUTOINCREMENT all live on the column itself; the
+      // caller (createTableDDL) omits this column from the separate PRIMARY KEY (...)
+      // line so it isn't declared twice.
+      return `${quoteIdentifier(column.name)} ${column.type} PRIMARY KEY AUTOINCREMENT`;
+    }
+    const type =
+      column.autoIncrement && autoIncrementType ? autoIncrementType(column.type) : column.type;
+    const suffix = column.autoIncrement && autoIncrementSuffix ? autoIncrementSuffix : "";
+    return `${quoteIdentifier(column.name)} ${type}${column.nullable ? "" : " NOT NULL"}${formatDefault(column.default)}${suffix}`;
+  };
 
   const inlineForeignKeyDDL = (fk: SqlForeignKeyDef): string =>
     `FOREIGN KEY (${fk.columns.map(quoteIdentifier).join(", ")}) REFERENCES ${quoteIdentifier(fk.referencedTable)} (${fk.referencedColumns.map(quoteIdentifier).join(", ")}) ON DELETE ${referentialActionSql(fk.onDelete)} ON UPDATE ${referentialActionSql(fk.onUpdate)}`;
 
   const createTableDDL: SqlDialect["createTableDDL"] = (table) => {
     const lines = table.columns.map(columnDDL);
-    if (table.primaryKey.length > 0) {
-      lines.push(`PRIMARY KEY (${table.primaryKey.map(quoteIdentifier).join(", ")})`);
+    const inlinedPrimaryKeyColumn =
+      inlinePrimaryKeyOnAutoIncrement && table.columns.find((c) => c.autoIncrement)?.name;
+    const remainingPrimaryKey = inlinedPrimaryKeyColumn
+      ? table.primaryKey.filter((name) => name !== inlinedPrimaryKeyColumn)
+      : table.primaryKey;
+    if (remainingPrimaryKey.length > 0) {
+      lines.push(`PRIMARY KEY (${remainingPrimaryKey.map(quoteIdentifier).join(", ")})`);
     }
     if (!supportsAlterForeignKey) {
       for (const fk of table.foreignKeys) {
@@ -161,5 +192,8 @@ export function createPostgresDialect(): SqlDialect {
     quoteIdentifier,
     mapType,
     mapTypeBack,
+    // PostgreSQL has no AUTO_INCREMENT keyword — serial/bigserial are sugar for
+    // integer/bigint plus an implicitly-created sequence and DEFAULT nextval(...).
+    autoIncrementType: (mappedType) => (mappedType === "bigint" ? "bigserial" : "serial"),
   });
 }

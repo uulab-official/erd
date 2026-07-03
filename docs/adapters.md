@@ -82,6 +82,8 @@ interface SqlDialect {
 
 `PostgreSQLAdapter`, `MySQLAdapter`, `SQLiteAdapter`는 각자의 `SqlDialect` 구현체를 주입받는 thin wrapper다.
 
+**Auto-increment**: 단일 컬럼 integer/bigint PK이고 명시적 `default`가 없으면(`toNativeSchema.ts`) `SqlColumnDef.autoIncrement`가 켜진다. 세 dialect가 각각 다르게 렌더링한다 — PostgreSQL은 타입 자체를 `serial`/`bigserial`로 바꾸고(`AUTO_INCREMENT` 키워드가 없음), MySQL은 컬럼 정의 뒤에 ` AUTO_INCREMENT`를 붙이고, SQLite는 `AUTO_INCREMENT`가 별도 접미사가 아니라 `INTEGER PRIMARY KEY AUTOINCREMENT`라는 하나의 구문으로만 동작해서 그 컬럼을 테이블 제약의 별도 `PRIMARY KEY (...)` 줄이 아니라 컬럼 정의 자체에 인라인해야 한다(SQLite FK를 `CREATE TABLE`에 인라인하는 것과 같은 부류의 dialect별 특수 처리, `supportsAlterForeignKey`와 나란히 `SqlDialectOptions`에 `autoIncrementType`/`autoIncrementSuffix`/`inlinePrimaryKeyOnAutoIncrement` 훅으로 존재).
+
 ## AdapterRegistry
 
 ```ts

@@ -55,5 +55,9 @@ export function createSQLiteDialect(): SqlDialect {
     quoteIdentifier,
     mapType,
     mapTypeBack,
+    // SQLite has no AUTO_INCREMENT/SERIAL keyword or type — "INTEGER PRIMARY KEY" is
+    // itself an alias for the internal rowid, and appending AUTOINCREMENT (a distinct
+    // keyword, not a suffix on that phrase) only works when it's inline on the column.
+    inlinePrimaryKeyOnAutoIncrement: true,
   });
 }

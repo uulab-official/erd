@@ -32,6 +32,35 @@ describe("createSQLiteDialect", () => {
     const sql = renderSql(toNativeSchema(shopModel(), dialect), dialect);
     expect(sql).not.toContain("ALTER TABLE");
   });
+
+  it("inlines INTEGER PRIMARY KEY AUTOINCREMENT on the column, omitting a separate PRIMARY KEY line", () => {
+    const ddl = dialect.createTableDDL({
+      name: "widget",
+      columns: [
+        { name: "id", type: "integer", nullable: false, autoIncrement: true },
+        { name: "name", type: "varchar(255)", nullable: false, default: null },
+      ],
+      primaryKey: ["id"],
+      indexes: [],
+      foreignKeys: [],
+    });
+    expect(ddl).toContain('"id" integer PRIMARY KEY AUTOINCREMENT');
+    expect(ddl).not.toMatch(/PRIMARY KEY \(/);
+  });
+
+  it("still emits a separate PRIMARY KEY line for a composite key (no column is auto-increment)", () => {
+    const ddl = dialect.createTableDDL({
+      name: "widget_tag",
+      columns: [
+        { name: "widget_id", type: "integer", nullable: false },
+        { name: "tag_id", type: "integer", nullable: false },
+      ],
+      primaryKey: ["widget_id", "tag_id"],
+      indexes: [],
+      foreignKeys: [],
+    });
+    expect(ddl).toContain('PRIMARY KEY ("widget_id", "tag_id")');
+  });
 });
 
 describe("planSqlDeployment with SQLite", () => {

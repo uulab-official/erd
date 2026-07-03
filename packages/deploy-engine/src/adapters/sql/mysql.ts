@@ -59,5 +59,6 @@ export function createMySqlDialect(): SqlDialect {
     quoteIdentifier,
     mapType,
     mapTypeBack,
+    autoIncrementSuffix: " AUTO_INCREMENT",
   });
 }

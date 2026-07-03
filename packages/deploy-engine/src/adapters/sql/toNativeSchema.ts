@@ -3,14 +3,27 @@ import type { SqlDialect } from "./dialect.js";
 import type { SqlForeignKeyDef, SqlNativeSchema, SqlTableDef } from "./types.js";
 
 function toTable(entity: Entity, model: Model, dialect: SqlDialect): SqlTableDef {
+  const primaryKey = entity.attributes.filter((a) => a.isPrimaryKey).map((a) => a.name);
+  // Auto-increment only makes sense for a sole integer/bigint PK with no explicit
+  // default — a composite PK or an explicit default (e.g. a UUID generator function)
+  // means the database isn't the one assigning the value.
+  const soleAutoIncrementAttribute =
+    primaryKey.length === 1
+      ? entity.attributes.find(
+          (a) =>
+            a.isPrimaryKey &&
+            (a.type === "integer" || a.type === "bigint") &&
+            (a.default === undefined || a.default === null),
+        )
+      : undefined;
+
   const columns = entity.attributes.map((attr) => ({
     name: attr.name,
     type: dialect.mapType(attr.type, attr.length, attr.scale),
     nullable: attr.nullable,
     default: attr.default ?? null,
+    ...(attr.id === soleAutoIncrementAttribute?.id ? { autoIncrement: true } : {}),
   }));
-
-  const primaryKey = entity.attributes.filter((a) => a.isPrimaryKey).map((a) => a.name);
 
   const indexes = entity.indexes.map((index) => ({
     name: index.name,

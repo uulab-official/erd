@@ -35,6 +35,12 @@ describe("createMySqlDialect", () => {
     expect(sql).toContain("CREATE TABLE `customer`");
     expect(sql).toContain("ALTER TABLE `purchase_order` ADD CONSTRAINT");
   });
+
+  it("appends AUTO_INCREMENT to an auto-increment column", () => {
+    expect(
+      dialect.columnDDL({ name: "id", type: "int", nullable: false, autoIncrement: true }),
+    ).toBe("`id` int NOT NULL AUTO_INCREMENT");
+  });
 });
 
 describe("createMySQLAdapter", () => {

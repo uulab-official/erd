@@ -82,4 +82,13 @@ describe("createPostgresDialect", () => {
     expect(fkDdl).toContain("ON DELETE CASCADE");
     expect(fkDdl).toContain("ON UPDATE NO ACTION");
   });
+
+  it("renders an auto-increment integer column as serial, bigint as bigserial", () => {
+    expect(
+      dialect.columnDDL({ name: "id", type: "integer", nullable: false, autoIncrement: true }),
+    ).toBe('"id" serial NOT NULL');
+    expect(
+      dialect.columnDDL({ name: "id", type: "bigint", nullable: false, autoIncrement: true }),
+    ).toBe('"id" bigserial NOT NULL');
+  });
 });
