@@ -61,6 +61,9 @@ importers:
       "@modelforge/layout-engine":
         specifier: workspace:*
         version: link:../../packages/layout-engine
+      "@modelforge/parser":
+        specifier: workspace:*
+        version: link:../../packages/parser
       "@modelforge/schema-engine":
         specifier: workspace:*
         version: link:../../packages/schema-engine

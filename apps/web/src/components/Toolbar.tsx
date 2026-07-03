@@ -7,6 +7,7 @@ import { downloadExport, exporters } from "../lib/exporters.js";
 import { downloadGenerated, generators } from "../lib/generators.js";
 import { layoutEngines } from "../lib/layouts.js";
 import { importAppwriteJsonFile } from "../lib/importAppwrite.js";
+import { importTextFile } from "../lib/importText.js";
 import { canDeploy, importLiveAppwriteSchema } from "../lib/appwrite.js";
 
 function Divider() {
@@ -74,8 +75,14 @@ export function Toolbar() {
     if (!file) return;
     setImportError(null);
     try {
-      const imported = await importAppwriteJsonFile(file);
-      importModel(imported);
+      if (file.name.toLowerCase().endsWith(".json")) {
+        importModel(await importAppwriteJsonFile(file));
+      } else {
+        // Text formats (DBML/Mermaid) describe schema, not identity — keep editing the
+        // same Model document (id/name/adapter) so Save still writes where it did.
+        const imported = await importTextFile(file);
+        importModel({ ...imported, id: model.id, name: model.name, adapter: model.adapter });
+      }
     } catch (error) {
       setImportError(error instanceof Error ? error.message : String(error));
     }
@@ -144,7 +151,7 @@ export function Toolbar() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="application/json"
+        accept=".json,.dbml,.mmd,.mermaid"
         className="hidden"
         onChange={(e) => {
           void handleImportFile(e.target.files?.[0]);

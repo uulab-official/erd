@@ -1,5 +1,31 @@
 // Text-format Importers (DBML/Mermaid/SQL) that don't map to a deployable Adapter. See /docs/plugins.md.
 import type { Model } from "@modelforge/schema-engine";
+import type { Importer } from "@modelforge/sdk";
+import { parseDbml } from "./dbml.js";
+
+export { parseDbml } from "./dbml.js";
+
+async function inputToText(input: string | Blob): Promise<string> {
+  return typeof input === "string" ? input : input.text();
+}
+
+export const dbmlImporter: Importer = {
+  id: "import.dbml",
+  label: "DBML",
+  sourceFormat: "dbml",
+  async parse(input) {
+    return parseDbml(await inputToText(input));
+  },
+};
+
+export const mermaidImporter: Importer = {
+  id: "import.mermaid",
+  label: "Mermaid erDiagram",
+  sourceFormat: "mermaid",
+  async parse(input) {
+    return parseMermaidErDiagram(await inputToText(input));
+  },
+};
 
 // Placeholder Mermaid erDiagram parser: recognizes `Entity1 ||--o{ Entity2 : label` lines
 // and produces empty-attribute entities/relationships. Full attribute parsing lands later.
