@@ -4,13 +4,15 @@ import { createEntity } from "./entity.js";
 import { createDomain } from "./governance.js";
 import { createRelationship } from "./relationship.js";
 import {
+  connectEntitiesCascade,
   deleteDomainCascade,
   deleteEntityCascade,
+  redoTransaction,
   undoTransaction,
   updateDomainCascade,
 } from "./transaction.js";
 import { customerEntity, emptyModel, orderEntity } from "./test-fixtures.js";
-import type { Relationship } from "@modelforge/schema-engine";
+import type { Entity, Relationship } from "@modelforge/schema-engine";
 
 function modelWithRelationship() {
   let model = createEntity(emptyModel(), customerEntity(), "user-1").model;
@@ -93,5 +95,203 @@ describe("deleteDomainCascade", () => {
     const before = modelWithDomainAssignedToId();
     const { model, transaction } = deleteDomainCascade(before, "d1", "user-1");
     expect(undoTransaction(model, transaction)).toEqual(before);
+  });
+});
+
+function blankOrderEntity(): Entity {
+  return {
+    id: "order",
+    logicalName: "Order",
+    physicalName: "order",
+    tags: [],
+    attributes: [
+      {
+        id: "order_id",
+        name: "id",
+        logicalName: "ID",
+        type: "uuid",
+        nullable: false,
+        isPrimaryKey: true,
+        isForeignKey: false,
+        isUnique: true,
+      },
+    ],
+    indexes: [],
+    ui: { x: 280, y: 0 },
+  };
+}
+
+function twoEntityModel() {
+  let model = createEntity(emptyModel(), customerEntity(), "user-1").model;
+  model = createEntity(model, blankOrderEntity(), "user-1").model;
+  return model;
+}
+
+describe("connectEntitiesCascade", () => {
+  it("creates a foreign key attribute on the target mirroring the source's primary key, then the relationship", () => {
+    const before = twoEntityModel();
+    const { model, transaction } = connectEntitiesCascade(
+      before,
+      {
+        sourceEntityId: "customer",
+        targetEntityId: "order",
+        relationshipId: "r1",
+        foreignKeyAttributeId: "fk1",
+      },
+      "user-1",
+    );
+
+    expect(transaction.operations.map((o) => o.type)).toEqual([
+      "AddAttribute",
+      "CreateRelationship",
+    ]);
+    const order = model.entities.find((e) => e.id === "order")!;
+    const fk = order.attributes.find((a) => a.id === "fk1");
+    expect(fk).toMatchObject({
+      name: "customer_id",
+      logicalName: "Customer ID",
+      type: "uuid",
+      isForeignKey: true,
+      isPrimaryKey: false,
+      nullable: false,
+    });
+    expect(model.relationships).toEqual([
+      {
+        id: "r1",
+        name: undefined,
+        sourceEntityId: "customer",
+        targetEntityId: "order",
+        cardinality: "one-to-many",
+        kind: "non-identifying",
+        optionality: "mandatory",
+        sourceAttributeIds: ["id"],
+        targetAttributeIds: ["fk1"],
+      },
+    ]);
+  });
+
+  it("undoTransaction removes both the relationship and the foreign key attribute atomically", () => {
+    const before = twoEntityModel();
+    const { model, transaction } = connectEntitiesCascade(
+      before,
+      {
+        sourceEntityId: "customer",
+        targetEntityId: "order",
+        relationshipId: "r1",
+        foreignKeyAttributeId: "fk1",
+      },
+      "user-1",
+    );
+    expect(undoTransaction(model, transaction)).toEqual(before);
+  });
+
+  it("redoTransaction re-applies both steps", () => {
+    const before = twoEntityModel();
+    const { model, transaction } = connectEntitiesCascade(
+      before,
+      {
+        sourceEntityId: "customer",
+        targetEntityId: "order",
+        relationshipId: "r1",
+        foreignKeyAttributeId: "fk1",
+      },
+      "user-1",
+    );
+    const undone = undoTransaction(model, transaction);
+    expect(redoTransaction(undone, transaction)).toEqual(model);
+  });
+
+  it("marks the foreign key nullable and unique for an optional one-to-one connection", () => {
+    const before = twoEntityModel();
+    const { model } = connectEntitiesCascade(
+      before,
+      {
+        sourceEntityId: "customer",
+        targetEntityId: "order",
+        relationshipId: "r1",
+        foreignKeyAttributeId: "fk1",
+        cardinality: "one-to-one",
+        optionality: "optional",
+      },
+      "user-1",
+    );
+    const order = model.entities.find((e) => e.id === "order")!;
+    expect(order.attributes.find((a) => a.id === "fk1")).toMatchObject({
+      nullable: true,
+      isUnique: true,
+    });
+  });
+
+  it("rejects connecting to/from an unknown entity", () => {
+    const before = twoEntityModel();
+    expect(() =>
+      connectEntitiesCascade(
+        before,
+        {
+          sourceEntityId: "missing",
+          targetEntityId: "order",
+          relationshipId: "r1",
+          foreignKeyAttributeId: "fk1",
+        },
+        "user-1",
+      ),
+    ).toThrow();
+  });
+
+  it("rejects a source entity with no primary key", () => {
+    const noPkEntity: Entity = { ...customerEntity(), attributes: [] };
+    const before = createEntity(
+      createEntity(emptyModel(), noPkEntity, "user-1").model,
+      blankOrderEntity(),
+      "user-1",
+    ).model;
+    expect(() =>
+      connectEntitiesCascade(
+        before,
+        {
+          sourceEntityId: "customer",
+          targetEntityId: "order",
+          relationshipId: "r1",
+          foreignKeyAttributeId: "fk1",
+        },
+        "user-1",
+      ),
+    ).toThrow("no primary key");
+  });
+
+  it("rejects a source entity with a composite primary key", () => {
+    const compositeEntity: Entity = {
+      ...customerEntity(),
+      attributes: [
+        ...customerEntity().attributes,
+        {
+          id: "region",
+          name: "region",
+          logicalName: "Region",
+          type: "string",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: false,
+        },
+      ],
+    };
+    const before = createEntity(
+      createEntity(emptyModel(), compositeEntity, "user-1").model,
+      blankOrderEntity(),
+      "user-1",
+    ).model;
+    expect(() =>
+      connectEntitiesCascade(
+        before,
+        {
+          sourceEntityId: "customer",
+          targetEntityId: "order",
+          relationshipId: "r1",
+          foreignKeyAttributeId: "fk1",
+        },
+        "user-1",
+      ),
+    ).toThrow("composite primary key");
   });
 });

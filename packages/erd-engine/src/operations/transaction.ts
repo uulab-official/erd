@@ -1,11 +1,11 @@
-import type { Model } from "@modelforge/schema-engine";
+import type { Attribute, Model, Relationship } from "@modelforge/schema-engine";
 import type { Operation, Transaction } from "@modelforge/sdk";
 import { applyInverse, applyOperation, toDispatchable } from "./apply.js";
-import { assignDomain, unassignDomain } from "./attribute.js";
+import { addAttribute, assignDomain, unassignDomain } from "./attribute.js";
 import { deleteEntity } from "./entity.js";
 import { deleteDomain, updateDomain } from "./governance.js";
 import { nextOperationId } from "./operation.js";
-import { deleteRelationship } from "./relationship.js";
+import { createRelationship, deleteRelationship } from "./relationship.js";
 import type { UpdateDomainPayload } from "./types.js";
 
 // Compound edit: deleting an Entity that still has Relationships must remove those
@@ -108,6 +108,100 @@ export function deleteDomainCascade(
   return {
     model: currentModel,
     transaction: { id: nextOperationId(), operations, label: `Delete domain "${domainId}"` },
+  };
+}
+
+export interface ConnectEntitiesInput {
+  sourceEntityId: string;
+  targetEntityId: string;
+  relationshipId: string;
+  // Id for the new foreign-key Attribute this creates on the target entity — callers
+  // decide ids (crypto.randomUUID() in apps/web), erd-engine never generates entity-level
+  // ids itself.
+  foreignKeyAttributeId: string;
+  name?: string;
+  cardinality?: Relationship["cardinality"];
+  kind?: Relationship["kind"];
+  optionality?: Relationship["optionality"];
+}
+
+// Compound edit: drawing a relationship between two entities (e.g. dragging a connection
+// on the Canvas) needs a foreign-key Attribute to exist on the target before
+// CreateRelationship can reference it — this creates that Attribute (mirroring the
+// source's primary key's type) and the Relationship together as one atomically-undoable
+// Transaction, the same "create the thing being referenced first" ordering
+// updateDomainCascade/deleteDomainCascade use for Domains.
+export function connectEntitiesCascade(
+  model: Model,
+  input: ConnectEntitiesInput,
+  actorId: string,
+): { model: Model; transaction: Transaction } {
+  const source = model.entities.find((e) => e.id === input.sourceEntityId);
+  if (!source) throw new Error(`Entity "${input.sourceEntityId}" not found`);
+  const target = model.entities.find((e) => e.id === input.targetEntityId);
+  if (!target) throw new Error(`Entity "${input.targetEntityId}" not found`);
+
+  const sourcePrimaryKeys = source.attributes.filter((a) => a.isPrimaryKey);
+  if (sourcePrimaryKeys.length === 0) {
+    throw new Error(`Entity "${source.logicalName}" has no primary key to reference`);
+  }
+  if (sourcePrimaryKeys.length > 1) {
+    throw new Error(
+      `Entity "${source.logicalName}" has a composite primary key — add the foreign key attributes manually`,
+    );
+  }
+  const primaryKey = sourcePrimaryKeys[0]!;
+
+  const cardinality = input.cardinality ?? "one-to-many";
+  const kind = input.kind ?? "non-identifying";
+  const optionality = input.optionality ?? "mandatory";
+
+  const foreignKeyAttribute: Attribute = {
+    id: input.foreignKeyAttributeId,
+    name: `${source.physicalName}_${primaryKey.name}`,
+    logicalName: `${source.logicalName} ${primaryKey.logicalName}`,
+    type: primaryKey.type,
+    length: primaryKey.length,
+    scale: primaryKey.scale,
+    nullable: optionality === "optional",
+    isPrimaryKey: false,
+    isForeignKey: true,
+    isUnique: cardinality === "one-to-one",
+  };
+
+  let currentModel = model;
+  const operations: Operation[] = [];
+
+  const attributeResult = addAttribute(
+    currentModel,
+    { entityId: target.id, attribute: foreignKeyAttribute },
+    actorId,
+  );
+  currentModel = attributeResult.model;
+  operations.push(attributeResult.operation);
+
+  const relationship: Relationship = {
+    id: input.relationshipId,
+    name: input.name,
+    sourceEntityId: source.id,
+    targetEntityId: target.id,
+    cardinality,
+    kind,
+    optionality,
+    sourceAttributeIds: [primaryKey.id],
+    targetAttributeIds: [foreignKeyAttribute.id],
+  };
+  const relationshipResult = createRelationship(currentModel, relationship, actorId);
+  currentModel = relationshipResult.model;
+  operations.push(relationshipResult.operation);
+
+  return {
+    model: currentModel,
+    transaction: {
+      id: nextOperationId(),
+      operations,
+      label: `Connect "${source.logicalName}" to "${target.logicalName}"`,
+    },
   };
 }
 

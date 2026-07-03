@@ -5,6 +5,7 @@ import { validateModel, type ValidationIssue } from "@modelforge/schema-engine";
 import {
   addDictionaryEntry as addDictionaryEntryOp,
   assignDomain as assignDomainOp,
+  connectEntitiesCascade,
   createDomain as createDomainOp,
   createEntity,
   deleteDictionaryEntry as deleteDictionaryEntryOp,
@@ -57,6 +58,11 @@ interface EditorState {
   loading: boolean;
   addEntity(logicalName: string): void;
   removeEntity(entityId: string): void;
+  // Draws a Relationship from a Canvas drag between two entities' Handles — creates a
+  // foreign key Attribute on the target (mirroring the source's primary key) and the
+  // Relationship together. Throws if the source has no single-column primary key to
+  // reference; callers (the Canvas) are expected to surface that to the user.
+  connectEntities(sourceEntityId: string, targetEntityId: string): void;
   undo(): void;
   redo(): void;
   jumpToHistory(index: number): void;
@@ -154,6 +160,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   removeEntity(entityId) {
     const { model, transaction } = deleteEntityCascade(get().model, entityId, ACTOR_ID);
+    history.push(transaction);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  connectEntities(sourceEntityId, targetEntityId) {
+    const { model, transaction } = connectEntitiesCascade(
+      get().model,
+      {
+        sourceEntityId,
+        targetEntityId,
+        relationshipId: crypto.randomUUID(),
+        foreignKeyAttributeId: crypto.randomUUID(),
+      },
+      ACTOR_ID,
+    );
     history.push(transaction);
     set({ model, issues: validateModel(model), ...historyFlags() });
   },

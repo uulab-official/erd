@@ -1,11 +1,27 @@
-import { useMemo } from "react";
-import { MarkerType, ReactFlow, ReactFlowProvider, type Edge, type Node } from "reactflow";
+import { useCallback, useMemo } from "react";
+import {
+  MarkerType,
+  ReactFlow,
+  ReactFlowProvider,
+  type Connection,
+  type Edge,
+  type Node,
+} from "reactflow";
 import type { Model, Relationship } from "@modelforge/schema-engine";
 import { EntityNode, type EntityNodeData } from "./EntityNode.js";
 import "reactflow/dist/style.css";
 
+export interface ConnectEntitiesParams {
+  sourceEntityId: string;
+  targetEntityId: string;
+}
+
 export interface ErdCanvasProps {
   model: Model;
+  // Fired when the user drags a connection from one entity's Handle to another's — the
+  // caller decides what Relationship (if any) that should create; the Canvas itself has
+  // no opinion beyond "these two entities got connected."
+  onConnectEntities?: (params: ConnectEntitiesParams) => void;
 }
 
 const nodeTypes = { entity: EntityNode };
@@ -58,13 +74,32 @@ export function modelToEdges(model: Model): Edge[] {
 
 // Renders one EntityNode per Entity at its stored ui position, with a styled edge per
 // Relationship (see modelToEdges for what the styling communicates).
-export function ErdCanvas({ model }: ErdCanvasProps) {
+export function ErdCanvas({ model, onConnectEntities }: ErdCanvasProps) {
   const nodes = useMemo(() => modelToNodes(model), [model.entities]);
   const edges = useMemo(() => modelToEdges(model), [model.relationships]);
 
+  const handleConnect = useCallback(
+    (connection: Connection) => {
+      // React Flow's Connection allows either endpoint to be null (a drag that didn't
+      // land on a Handle) — nothing to report in that case.
+      if (!onConnectEntities || !connection.source || !connection.target) return;
+      onConnectEntities({
+        sourceEntityId: connection.source,
+        targetEntityId: connection.target,
+      });
+    },
+    [onConnectEntities],
+  );
+
   return (
     <ReactFlowProvider>
-      <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} fitView />
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        onConnect={handleConnect}
+        fitView
+      />
     </ReactFlowProvider>
   );
 }
