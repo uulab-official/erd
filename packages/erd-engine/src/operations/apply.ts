@@ -2,6 +2,7 @@ import type { Model } from "@modelforge/schema-engine";
 import type { Operation } from "@modelforge/sdk";
 import * as attributeOps from "./attribute.js";
 import * as entityOps from "./entity.js";
+import * as enumOps from "./enumType.js";
 import * as governanceOps from "./governance.js";
 import * as indexOps from "./indexes.js";
 import * as memoOps from "./memo.js";
@@ -235,6 +236,36 @@ export function applyOperation(model: Model, op: DispatchableOperation): Model {
       return memoOps.deleteMemo(
         model,
         op.payload as OperationPayloadMap["DeleteMemo"],
+        REPLAY_ACTOR,
+      ).model;
+    case "CreateEnum":
+      return enumOps.createEnum(
+        model,
+        op.payload as OperationPayloadMap["CreateEnum"],
+        REPLAY_ACTOR,
+      ).model;
+    case "UpdateEnumValues":
+      return enumOps.updateEnumValues(
+        model,
+        op.payload as OperationPayloadMap["UpdateEnumValues"],
+        REPLAY_ACTOR,
+      ).model;
+    case "DeleteEnum":
+      return enumOps.deleteEnum(
+        model,
+        op.payload as OperationPayloadMap["DeleteEnum"],
+        REPLAY_ACTOR,
+      ).model;
+    case "AssignEnumToAttribute":
+      return enumOps.assignEnumToAttribute(
+        model,
+        op.payload as OperationPayloadMap["AssignEnumToAttribute"],
+        REPLAY_ACTOR,
+      ).model;
+    case "UnassignEnumFromAttribute":
+      return enumOps.unassignEnumFromAttribute(
+        model,
+        op.payload as OperationPayloadMap["UnassignEnumFromAttribute"],
         REPLAY_ACTOR,
       ).model;
     default: {

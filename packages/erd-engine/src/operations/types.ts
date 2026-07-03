@@ -4,6 +4,7 @@ import type {
   ColumnType,
   DictionaryEntry,
   Domain,
+  EnumType,
   Entity,
   Index,
   Memo,
@@ -187,6 +188,31 @@ export interface DeleteMemoPayload {
   memoId: string;
 }
 
+export interface CreateEnumPayload {
+  enumType: EnumType;
+}
+export interface UpdateEnumValuesPayload {
+  enumId: string;
+  values: string[];
+}
+export interface DeleteEnumPayload {
+  enumId: string;
+}
+export interface AssignEnumToAttributePayload {
+  entityId: string;
+  attributeId: string;
+  enumId: string;
+}
+export interface UnassignEnumFromAttributePayload {
+  entityId: string;
+  attributeId: string;
+  // Only set when this payload is restoring a prior assignment (as the inverse of
+  // AssignEnumToAttribute/UnassignEnumFromAttribute) rather than performing a real
+  // user-triggered unassign, mirroring UnassignDomainPayload's `domainId`/`type`.
+  enumId?: string;
+  type?: ColumnType;
+}
+
 export interface OperationPayloadMap {
   CreateEntity: CreateEntityPayload;
   DeleteEntity: DeleteEntityPayload;
@@ -224,6 +250,11 @@ export interface OperationPayloadMap {
   UpdateMemoText: UpdateMemoTextPayload;
   MoveMemo: MoveMemoPayload;
   DeleteMemo: DeleteMemoPayload;
+  CreateEnum: CreateEnumPayload;
+  UpdateEnumValues: UpdateEnumValuesPayload;
+  DeleteEnum: DeleteEnumPayload;
+  AssignEnumToAttribute: AssignEnumToAttributePayload;
+  UnassignEnumFromAttribute: UnassignEnumFromAttributePayload;
 }
 
 export type OperationType = keyof OperationPayloadMap;

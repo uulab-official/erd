@@ -3,6 +3,7 @@ import type { Operation, Transaction } from "@modelforge/sdk";
 import { applyInverse, applyOperation, toDispatchable } from "./apply.js";
 import { addAttribute, assignDomain, unassignDomain } from "./attribute.js";
 import { deleteEntity, moveEntity } from "./entity.js";
+import { deleteEnum, unassignEnumFromAttribute } from "./enumType.js";
 import { deleteDomain, updateDomain } from "./governance.js";
 import { nextOperationId } from "./operation.js";
 import { createRelationship, deleteRelationship } from "./relationship.js";
@@ -141,6 +142,41 @@ export function deleteSubjectAreaCascade(
       operations,
       label: `Delete subject area "${subjectAreaId}"`,
     },
+  };
+}
+
+// Compound edit: deleting an Enum that's still assigned to Attributes must unassign it
+// from each of them first, then delete the Enum, as one atomically-undoable
+// Transaction — mirrors deleteDomainCascade/deleteSubjectAreaCascade's
+// unassign-then-delete ordering.
+export function deleteEnumCascade(
+  model: Model,
+  enumId: string,
+  actorId: string,
+): { model: Model; transaction: Transaction } {
+  let currentModel = model;
+  const operations: Operation[] = [];
+
+  for (const entity of model.entities) {
+    for (const attribute of entity.attributes) {
+      if (attribute.enumId !== enumId) continue;
+      const result = unassignEnumFromAttribute(
+        currentModel,
+        { entityId: entity.id, attributeId: attribute.id },
+        actorId,
+      );
+      currentModel = result.model;
+      operations.push(result.operation);
+    }
+  }
+
+  const enumResult = deleteEnum(currentModel, { enumId }, actorId);
+  currentModel = enumResult.model;
+  operations.push(enumResult.operation);
+
+  return {
+    model: currentModel,
+    transaction: { id: nextOperationId(), operations, label: `Delete enum "${enumId}"` },
   };
 }
 

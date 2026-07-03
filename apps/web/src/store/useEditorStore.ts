@@ -5,6 +5,7 @@ import type {
   ColumnType,
   DictionaryEntry,
   Domain,
+  EnumType,
   Index,
   Memo,
   Model,
@@ -18,18 +19,21 @@ import {
   addDictionaryEntry as addDictionaryEntryOp,
   assignDomain as assignDomainOp,
   assignEntityToSubjectArea as assignEntityToSubjectAreaOp,
+  assignEnumToAttribute as assignEnumToAttributeOp,
   changeAttributeType as changeAttributeTypeOp,
   changeRelationshipCardinality as changeRelationshipCardinalityOp,
   changeRelationshipKind as changeRelationshipKindOp,
   connectEntitiesCascade,
   createDomain as createDomainOp,
   createEntity,
+  createEnum as createEnumOp,
   createIndex as createIndexOp,
   createMemo as createMemoOp,
   createSubjectArea as createSubjectAreaOp,
   deleteDictionaryEntry as deleteDictionaryEntryOp,
   deleteDomainCascade,
   deleteEntityCascade,
+  deleteEnumCascade,
   deleteIndex as deleteIndexOp,
   deleteMemo as deleteMemoOp,
   deleteRelationship as deleteRelationshipOp,
@@ -47,8 +51,10 @@ import {
   setRelationshipMeta as setRelationshipMetaOp,
   unassignDomain as unassignDomainOp,
   unassignEntityFromSubjectArea as unassignEntityFromSubjectAreaOp,
+  unassignEnumFromAttribute as unassignEnumFromAttributeOp,
   updateDictionaryEntry as updateDictionaryEntryOp,
   updateDomainCascade,
+  updateEnumValues as updateEnumValuesOp,
   updateMemoText as updateMemoTextOp,
   updateNamingRuleSet as updateNamingRuleSetOp,
   updateSubjectArea as updateSubjectAreaOp,
@@ -173,6 +179,12 @@ interface EditorState {
   deleteSubjectArea(subjectAreaId: string): void;
   assignEntityToSubjectArea(entityId: string, subjectAreaId: string): void;
   unassignEntityFromSubjectArea(entityId: string): void;
+  // Enums (Model.enums, linked from Attribute.enumId) — see components/GovernancePanel.tsx.
+  createEnum(enumType: EnumType): void;
+  updateEnumValues(enumId: string, values: string[]): void;
+  deleteEnum(enumId: string): void;
+  assignEnumToAttribute(entityId: string, attributeId: string, enumId: string): void;
+  unassignEnumFromAttribute(entityId: string, attributeId: string): void;
   // Memos (freeform canvas sticky notes) — see components/Workspace.tsx.
   createMemo(memo: Memo): void;
   updateMemoText(memoId: string, text: string): void;
@@ -547,6 +559,44 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { model, operation } = unassignEntityFromSubjectAreaOp(
       get().model,
       { entityId },
+      ACTOR_ID,
+    );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  createEnum(enumType) {
+    const { model, operation } = createEnumOp(get().model, { enumType }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  updateEnumValues(enumId, values) {
+    const { model, operation } = updateEnumValuesOp(get().model, { enumId, values }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  deleteEnum(enumId) {
+    const { model, transaction } = deleteEnumCascade(get().model, enumId, ACTOR_ID);
+    history.push(transaction);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  assignEnumToAttribute(entityId, attributeId, enumId) {
+    const { model, operation } = assignEnumToAttributeOp(
+      get().model,
+      { entityId, attributeId, enumId },
+      ACTOR_ID,
+    );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  unassignEnumFromAttribute(entityId, attributeId) {
+    const { model, operation } = unassignEnumFromAttributeOp(
+      get().model,
+      { entityId, attributeId },
       ACTOR_ID,
     );
     history.push(operation);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { assignDomain } from "./attribute.js";
 import { createEntity } from "./entity.js";
+import { assignEnumToAttribute, createEnum } from "./enumType.js";
 import { createDomain } from "./governance.js";
 import { createRelationship } from "./relationship.js";
 import { assignEntityToSubjectArea, createSubjectArea } from "./subjectArea.js";
@@ -8,6 +9,7 @@ import {
   connectEntitiesCascade,
   deleteDomainCascade,
   deleteEntityCascade,
+  deleteEnumCascade,
   deleteSubjectAreaCascade,
   moveEntitiesTransaction,
   redoTransaction,
@@ -389,6 +391,57 @@ describe("deleteSubjectAreaCascade", () => {
       "user-1",
     ).model;
     const { model, transaction } = deleteSubjectAreaCascade(assigned, "sa1", "user-1");
+    expect(undoTransaction(model, transaction)).toEqual(assigned);
+  });
+});
+
+describe("deleteEnumCascade", () => {
+  it("unassigns every attribute referencing the enum before deleting it", () => {
+    const withEntity = createEntity(
+      createEntity(emptyModel(), customerEntity(), "user-1").model,
+      orderEntity(),
+      "user-1",
+    ).model;
+    const withEnum = createEnum(
+      withEntity,
+      { enumType: { id: "e1", name: "Status", values: ["active", "inactive"] } },
+      "user-1",
+    ).model;
+    const assigned = assignEnumToAttribute(
+      assignEnumToAttribute(
+        withEnum,
+        { entityId: "customer", attributeId: "id", enumId: "e1" },
+        "user-1",
+      ).model,
+      { entityId: "order", attributeId: "id", enumId: "e1" },
+      "user-1",
+    ).model;
+
+    const { model, transaction } = deleteEnumCascade(assigned, "e1", "user-1");
+    expect(model.enums).toEqual([]);
+    expect(model.entities.every((e) => e.attributes.every((a) => a.enumId === undefined))).toBe(
+      true,
+    );
+    expect(transaction.operations.map((o) => o.type)).toEqual([
+      "UnassignEnumFromAttribute",
+      "UnassignEnumFromAttribute",
+      "DeleteEnum",
+    ]);
+  });
+
+  it("undoTransaction restores the enum and every assignment atomically", () => {
+    const withEntity = createEntity(emptyModel(), customerEntity(), "user-1").model;
+    const withEnum = createEnum(
+      withEntity,
+      { enumType: { id: "e1", name: "Status", values: ["active", "inactive"] } },
+      "user-1",
+    ).model;
+    const assigned = assignEnumToAttribute(
+      withEnum,
+      { entityId: "customer", attributeId: "id", enumId: "e1" },
+      "user-1",
+    ).model;
+    const { model, transaction } = deleteEnumCascade(assigned, "e1", "user-1");
     expect(undoTransaction(model, transaction)).toEqual(assigned);
   });
 });

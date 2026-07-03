@@ -75,6 +75,7 @@ interface Attribute {
   isUnique: boolean;
   default?: string | number | boolean | null;
   domainId?: string; // Domain에 묶이면 type/length/validation을 domain에서 상속
+  enumId?: string; // type이 'enum'일 때 어떤 EnumType(Model.enums)의 값 목록을 쓰는지 — domainId와 같은 단일-소속 모양
   comment?: string;
 }
 ```

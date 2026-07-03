@@ -19,6 +19,7 @@ export * from "./operations/operation.js";
 export * from "./operations/entity.js";
 export * from "./operations/attribute.js";
 export * from "./operations/indexes.js";
+export * from "./operations/enumType.js";
 export * from "./operations/memo.js";
 export * from "./operations/relationship.js";
 export * from "./operations/subjectArea.js";

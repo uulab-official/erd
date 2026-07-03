@@ -27,6 +27,10 @@ export interface Attribute {
   isUnique: boolean;
   default?: string | number | boolean | null;
   domainId?: string;
+  // Which EnumType (Model.enums) this attribute's allowed values come from — only
+  // meaningful when type is "enum". Same single-membership shape as domainId: an
+  // attribute references at most one EnumType at a time.
+  enumId?: string;
   comment?: string;
 }
 

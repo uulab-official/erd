@@ -39,6 +39,11 @@ const LABELS: Record<OperationType, string> = {
   UpdateMemoText: "Update memo text",
   MoveMemo: "Move memo",
   DeleteMemo: "Delete memo",
+  CreateEnum: "Create enum",
+  UpdateEnumValues: "Update enum values",
+  DeleteEnum: "Delete enum",
+  AssignEnumToAttribute: "Assign enum to attribute",
+  UnassignEnumFromAttribute: "Unassign enum from attribute",
 };
 
 // Human-readable label for a History Panel entry. Transactions already carry their own

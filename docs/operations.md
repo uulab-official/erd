@@ -57,7 +57,8 @@ interface OperationResult {
 ### Index / Enum / Sequence / View
 
 - `CreateIndex` / `DeleteIndex`
-- `CreateEnum` / `UpdateEnumValues` / `DeleteEnum`
+- `CreateEnum` / `UpdateEnumValues` / `DeleteEnum` — 구현: `packages/erd-engine/src/operations/enumType.ts`. Attribute가 아직 참조 중이면 `DeleteEnum`이 에러를 던진다 — `deleteEnumCascade`(transaction.ts)로 먼저 전부 해제해야 한다(`deleteDomainCascade`/`deleteSubjectAreaCascade`와 동일 패턴).
+- `AssignEnumToAttribute` / `UnassignEnumFromAttribute` — 구현 완료. `Attribute.enumId`는 `domainId`와 같은 단일-소속 모양이고, assign은 `AssignDomain`처럼 Attribute의 `type`을 즉시 `"enum"`으로 동기화한다. 둘 다 inverse가 항상 "정확한 이전 `enumId`+`type`을 담은 `UnassignEnumFromAttribute`"다 — `priorDomainState`와 동일한 이유로, Enum 자체가 같은 Transaction 안에서 함께 undo될 때 re-derive하면 undo 시점의 잘못된 상태를 읽을 수 있기 때문.
 - `CreateSequence` / `DeleteSequence`
 - `CreateView` / `UpdateView` / `DeleteView`
 

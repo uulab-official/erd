@@ -3,7 +3,7 @@ import type { ColumnType, NamingRuleSet } from "@modelforge/schema-engine";
 import { Button, Card, Input, Select, Tabs } from "@modelforge/ui";
 import { useEditorStore } from "../store/useEditorStore.js";
 
-type GovernanceTab = "domains" | "dictionary" | "naming" | "subjectAreas";
+type GovernanceTab = "domains" | "dictionary" | "naming" | "subjectAreas" | "enums";
 
 const COLUMN_TYPES: ColumnType[] = [
   "string",
@@ -441,6 +441,151 @@ function SubjectAreasSection() {
   );
 }
 
+function EnumsSection() {
+  const {
+    model,
+    createEnum,
+    updateEnumValues,
+    deleteEnum,
+    assignEnumToAttribute,
+    unassignEnumFromAttribute,
+  } = useEditorStore();
+  const enums = model.enums;
+  const [name, setName] = useState("");
+  const [values, setValues] = useState("");
+  const [valuesDraft, setValuesDraft] = useState<Record<string, string>>({});
+  const [assignTarget, setAssignTarget] = useState<Record<string, string>>({});
+
+  const attributeOptions = model.entities.flatMap((entity) =>
+    entity.attributes.map((attribute) => ({
+      entityId: entity.id,
+      attributeId: attribute.id,
+      label: `${entity.logicalName}.${attribute.logicalName}`,
+      enumId: attribute.enumId,
+    })),
+  );
+
+  function parseValues(raw: string): string[] {
+    return raw
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+
+  function handleCreate() {
+    const parsedValues = parseValues(values);
+    if (!name.trim() || parsedValues.length === 0) return;
+    createEnum({ id: crypto.randomUUID(), name: name.trim(), values: parsedValues });
+    setName("");
+    setValues("");
+  }
+
+  function handleAssign(enumId: string) {
+    const target = assignTarget[enumId];
+    if (!target) return;
+    const [entityId, attributeId] = target.split(":");
+    if (!entityId || !attributeId) return;
+    assignEnumToAttribute(entityId, attributeId, enumId);
+  }
+
+  return (
+    <div className="flex flex-col gap-3 p-4">
+      <div className="flex gap-2">
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Enum name (e.g. OrderStatus)"
+          className="flex-1"
+        />
+        <Input
+          value={values}
+          onChange={(e) => setValues(e.target.value)}
+          placeholder="Values, comma-separated (e.g. pending, shipped)"
+          className="flex-1"
+        />
+        <Button variant="secondary" size="sm" onClick={handleCreate}>
+          Add Enum
+        </Button>
+      </div>
+
+      {enums.length === 0 && <p className="text-sm text-slate-400">No enums yet.</p>}
+
+      <ul className="flex flex-col gap-2">
+        {enums.map((enumType) => {
+          const assigned = attributeOptions.filter((a) => a.enumId === enumType.id);
+          const unassigned = attributeOptions.filter((a) => a.enumId !== enumType.id);
+          return (
+            <Card key={enumType.id} as="li" className="p-3">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-slate-900">{enumType.name}</span>
+                <Input
+                  defaultValue={valuesDraft[enumType.id] ?? enumType.values.join(", ")}
+                  className="flex-1"
+                  onChange={(e) =>
+                    setValuesDraft({ ...valuesDraft, [enumType.id]: e.target.value })
+                  }
+                  onBlur={(e) => updateEnumValues(enumType.id, parseValues(e.target.value))}
+                />
+                <button
+                  className="ml-auto text-sm text-red-600 hover:underline disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={assigned.length > 0}
+                  title={assigned.length > 0 ? "Unassign every attribute first" : undefined}
+                  onClick={() => deleteEnum(enumType.id)}
+                >
+                  Delete
+                </button>
+              </div>
+
+              {assigned.length > 0 && (
+                <ul className="ml-4 mt-2 flex flex-col gap-1 text-xs text-slate-600">
+                  {assigned.map((a) => (
+                    <li key={`${a.entityId}.${a.attributeId}`} className="flex items-center gap-2">
+                      {a.label}
+                      <button
+                        className="text-red-600 hover:underline"
+                        onClick={() => unassignEnumFromAttribute(a.entityId, a.attributeId)}
+                      >
+                        Unassign
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {unassigned.length > 0 && (
+                <div className="ml-4 mt-2 flex items-center gap-2">
+                  <Select
+                    value={assignTarget[enumType.id] ?? ""}
+                    onChange={(e) =>
+                      setAssignTarget({ ...assignTarget, [enumType.id]: e.target.value })
+                    }
+                  >
+                    <option value="">Assign to attribute…</option>
+                    {unassigned.map((a) => (
+                      <option
+                        key={`${a.entityId}.${a.attributeId}`}
+                        value={`${a.entityId}:${a.attributeId}`}
+                      >
+                        {a.label}
+                      </option>
+                    ))}
+                  </Select>
+                  <button
+                    className="text-sm text-brand-700 hover:underline"
+                    onClick={() => handleAssign(enumType.id)}
+                  >
+                    Assign
+                  </button>
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export function GovernancePanel() {
   const [tab, setTab] = useState<GovernanceTab>("domains");
 
@@ -452,6 +597,7 @@ export function GovernancePanel() {
           { id: "dictionary", label: "Dictionary" },
           { id: "naming", label: "Naming Rules" },
           { id: "subjectAreas", label: "Subject Areas" },
+          { id: "enums", label: "Enums" },
         ]}
         activeId={tab}
         onChange={(id) => setTab(id as GovernanceTab)}
@@ -461,6 +607,7 @@ export function GovernancePanel() {
       {tab === "dictionary" && <DictionarySection />}
       {tab === "naming" && <NamingRulesSection />}
       {tab === "subjectAreas" && <SubjectAreasSection />}
+      {tab === "enums" && <EnumsSection />}
     </div>
   );
 }
