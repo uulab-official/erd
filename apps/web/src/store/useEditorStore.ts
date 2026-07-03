@@ -28,6 +28,7 @@ import {
   deleteIndex as deleteIndexOp,
   deleteRelationship as deleteRelationshipOp,
   describeHistoryEntry,
+  moveEntity as moveEntityOp,
   OperationHistory,
   removeAttribute as removeAttributeOp,
   renameAttribute as renameAttributeOp,
@@ -80,6 +81,10 @@ interface EditorState {
   loading: boolean;
   addEntity(logicalName: string): void;
   removeEntity(entityId: string): void;
+  // Persists a canvas drag's end position. A no-op when the position didn't actually
+  // change (React Flow can fire drag-stop for a zero-movement click) so the undo
+  // history never fills with junk MoveEntity entries.
+  moveEntity(entityId: string, x: number, y: number): void;
   // Draws a Relationship from a Canvas drag between two entities' Handles — creates a
   // foreign key Attribute on the target (mirroring the source's primary key) and the
   // Relationship together. Throws if the source has no single-column primary key to
@@ -220,6 +225,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   removeEntity(entityId) {
     const { model, transaction } = deleteEntityCascade(get().model, entityId, ACTOR_ID);
     history.push(transaction);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  moveEntity(entityId, x, y) {
+    const entity = get().model.entities.find((e) => e.id === entityId);
+    if (!entity || (entity.ui.x === x && entity.ui.y === y)) return;
+    const { model, operation } = moveEntityOp(get().model, { entityId, x, y }, ACTOR_ID);
+    history.push(operation);
     set({ model, issues: validateModel(model), ...historyFlags() });
   },
 

@@ -1,11 +1,13 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  applyNodeChanges,
   MarkerType,
   ReactFlow,
   ReactFlowProvider,
   type Connection,
   type Edge,
   type Node,
+  type NodeChange,
 } from "reactflow";
 import type { Model, Relationship } from "@modelforge/schema-engine";
 import { EntityNode, type EntityNodeData } from "./EntityNode.js";
@@ -14,6 +16,12 @@ import "reactflow/dist/style.css";
 export interface ConnectEntitiesParams {
   sourceEntityId: string;
   targetEntityId: string;
+}
+
+export interface MoveEntityParams {
+  entityId: string;
+  x: number;
+  y: number;
 }
 
 export interface ErdCanvasProps {
@@ -31,6 +39,11 @@ export interface ErdCanvasProps {
   // relationship inspector" should treat the two selections as mutually exclusive
   // themselves (see apps/web's useSelectionStore).
   onSelectRelationship?: (relationshipId: string | null) => void;
+  // Fired once when a node drag ends, with the entity's final canvas position — NOT on
+  // every intermediate drag frame. Intermediate movement lives in this component's local
+  // React Flow state (see the semi-controlled `nodes` below); the caller only needs to
+  // persist the end position into the Model (e.g. as a MoveEntity Operation).
+  onMoveEntity?: (params: MoveEntityParams) => void;
 }
 
 const nodeTypes = { entity: EntityNode };
@@ -88,9 +101,29 @@ export function ErdCanvas({
   onConnectEntities,
   onSelectEntity,
   onSelectRelationship,
+  onMoveEntity,
 }: ErdCanvasProps) {
-  const nodes = useMemo(() => modelToNodes(model), [model.entities]);
+  // Nodes are semi-controlled: the Model is the source of truth (re-synced whenever its
+  // entities change — including undo/redo, which snaps nodes back), but drags mutate
+  // this local copy frame-by-frame so movement is smooth without writing an Operation
+  // per mousemove. onNodeDragStop then reports the final position via onMoveEntity.
+  const [nodes, setNodes] = useState<Node<EntityNodeData>[]>(() => modelToNodes(model));
+  useEffect(() => {
+    setNodes(modelToNodes(model));
+  }, [model.entities]);
   const edges = useMemo(() => modelToEdges(model), [model.relationships]);
+
+  const handleNodesChange = useCallback(
+    (changes: NodeChange[]) =>
+      setNodes((current) => applyNodeChanges(changes, current) as Node<EntityNodeData>[]),
+    [],
+  );
+
+  const handleNodeDragStop = useCallback(
+    (_event: unknown, node: Node) =>
+      onMoveEntity?.({ entityId: node.id, x: node.position.x, y: node.position.y }),
+    [onMoveEntity],
+  );
 
   const handleConnect = useCallback(
     (connection: Connection) => {
@@ -126,6 +159,8 @@ export function ErdCanvas({
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        onNodesChange={handleNodesChange}
+        onNodeDragStop={handleNodeDragStop}
         onConnect={handleConnect}
         onNodeClick={handleNodeClick}
         onEdgeClick={handleEdgeClick}

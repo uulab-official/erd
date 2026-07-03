@@ -7,7 +7,7 @@ import { useEditorStore } from "../store/useEditorStore.js";
 import { useSelectionStore } from "../store/useSelectionStore.js";
 
 export function Workspace() {
-  const { model, connectEntities } = useEditorStore();
+  const { model, connectEntities, moveEntity } = useEditorStore();
   const selectedEntityId = useSelectionStore((state) => state.selectedEntityId);
   const selectedRelationshipId = useSelectionStore((state) => state.selectedRelationshipId);
   const selectEntity = useSelectionStore((state) => state.selectEntity);
@@ -31,6 +31,7 @@ export function Workspace() {
             onConnectEntities={handleConnectEntities}
             onSelectEntity={selectEntity}
             onSelectRelationship={selectRelationship}
+            onMoveEntity={(params) => moveEntity(params.entityId, params.x, params.y)}
           />
         </main>
         {selectedEntityId && <EntityInspector />}
