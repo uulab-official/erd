@@ -49,6 +49,11 @@ pnpm format        # Prettier 적용
 
 각 명령은 [Turborepo](https://turbo.build)로 오케스트레이션되며, 패키지 간 의존성 순서와 캐시를 자동으로 처리한다.
 
+## 배포
+
+`main`에 머지하면 GitHub Actions가 `apps/web`을 빌드해 Appwrite Sites로 자동 배포한다
+(머지 = 릴리스). 1회성 설정과 상세 내용은 [docs/deployment.md](docs/deployment.md) 참고.
+
 ## MVP 로드맵
 
 Phase 1~4 우선순위와 실제 진행 상황은 [ROADMAP.md](ROADMAP.md) 참고.

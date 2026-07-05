@@ -1,0 +1,60 @@
+name: Deploy
+
+# Production release pipeline: every push to main builds apps/web and publishes it to
+# Appwrite Sites. Merging to main IS the release — no manual deploy step. See
+# docs/deployment.md for the one-time setup (site creation + repository secrets).
+on:
+  push:
+    branches: [main]
+  # Allow manual re-deploys of the current main (e.g. after rotating a secret) without
+  # needing an empty commit.
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy-web:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build production bundle
+        run: pnpm build
+        env:
+          VITE_APPWRITE_ENDPOINT: ${{ secrets.APPWRITE_ENDPOINT }}
+          VITE_APPWRITE_PROJECT_ID: ${{ secrets.APPWRITE_PROJECT_ID }}
+          VITE_APPWRITE_DATABASE_ID: ${{ secrets.APPWRITE_DATABASE_ID }}
+          VITE_APPWRITE_MODELS_TABLE_ID: ${{ secrets.APPWRITE_MODELS_TABLE_ID }}
+
+      - name: Deploy to Appwrite Sites
+        env:
+          APPWRITE_ENDPOINT: ${{ secrets.APPWRITE_ENDPOINT }}
+          APPWRITE_PROJECT_ID: ${{ secrets.APPWRITE_PROJECT_ID }}
+          # Needs the sites.read + sites.write scopes — use a key created just for CI,
+          # not the admin key parked in apps/web/.env.local.
+          APPWRITE_API_KEY: ${{ secrets.APPWRITE_DEPLOY_API_KEY }}
+          APPWRITE_SITE_ID: ${{ secrets.APPWRITE_SITE_ID }}
+        run: |
+          npm install -g appwrite-cli
+          appwrite client \
+            --endpoint "$APPWRITE_ENDPOINT" \
+            --project-id "$APPWRITE_PROJECT_ID" \
+            --key "$APPWRITE_API_KEY"
+          appwrite sites create-deployment \
+            --site-id "$APPWRITE_SITE_ID" \
+            --code apps/web/dist \
+            --activate true

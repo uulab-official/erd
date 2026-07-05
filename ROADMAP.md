@@ -55,7 +55,7 @@ Phase 구분은 [ARCHITECTURE.md#mvp-우선순위](ARCHITECTURE.md#mvp-우선순
 
 - [ ] PostgreSQL/MySQL Reverse Engineering (Adapter의 `fromNativeSchema` + DB introspection)
 - [ ] GitHub 연동
-- [ ] CI/CD Deploy
+- [x] CI/CD Deploy (프로덕션 릴리스 파이프라인) — `.github/workflows/deploy.yml`: `main`에 push될 때마다 `apps/web`을 빌드해 **Appwrite Sites**로 자동 배포한다(머지 = 릴리스). `VITE_*` 환경변수는 GitHub Secrets로 주입하고, 배포는 `sites.read`/`sites.write` 스코프만 가진 CI 전용 API 키를 쓴다(관리자 키를 CI에 넣지 않음). 에이전트가 대신 할 수 없는 1회성 설정(Site 생성, CI 키 발급, GitHub Secrets 등록, 배포 도메인의 Web Platform 등록 — 마지막 걸 빼먹으면 배포된 사이트의 모든 Appwrite 호출이 CORS로 죽는다)은 [docs/deployment.md](docs/deployment.md)에 명령어 단위로 정리 — [PR #41](https://github.com/uulab-official/erd/pull/41). 여기서 "CI/CD Deploy"의 원래 의미였던 "모델을 DB에 배포하는 CD"는 여전히 미구현(Deploy Plan의 apply는 Appwrite adapter만 연결됨).
 - [ ] Migration Manager
 - [ ] 플러그인 시스템 (서드파티 `plugin.json` 매니페스트 동적 로드 — [docs/plugins.md](docs/plugins.md) "등록 시점" 참고)
 - [ ] Marketplace
