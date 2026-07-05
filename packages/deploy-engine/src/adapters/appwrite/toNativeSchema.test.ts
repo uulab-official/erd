@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { toNativeSchema } from "./toNativeSchema.js";
 import { shopModel } from "./test-fixtures.js";
+import type { AppwriteAttributeDef } from "./types.js";
 
 describe("toNativeSchema", () => {
   it("maps entities to collections and non-FK attributes to plain attributes", () => {
@@ -49,5 +50,46 @@ describe("toNativeSchema", () => {
       type: "unique",
       attributes: ["order_id", "id2"],
     });
+  });
+
+  it("resolves a linked EnumType's values into the native attribute's elements", () => {
+    const model = shopModel();
+    model.enums = [{ id: "e1", name: "OrderStatus", values: ["pending", "shipped"] }];
+    model.entities[1]!.attributes.push({
+      id: "status",
+      name: "status",
+      logicalName: "Status",
+      type: "enum",
+      enumId: "e1",
+      nullable: false,
+      isPrimaryKey: false,
+      isForeignKey: false,
+      isUnique: false,
+    });
+    const schema = toNativeSchema(model);
+    const order = schema.collections.find((c) => c.id === "order");
+    const status = order?.attributes.find((a) => a.key === "status") as AppwriteAttributeDef;
+    expect(status.type).toBe("enum");
+    expect(status.elements).toEqual(["pending", "shipped"]);
+  });
+
+  it("falls back to a plain string attribute (not a broken elements-less enum) when enumId doesn't resolve", () => {
+    const model = shopModel();
+    model.entities[1]!.attributes.push({
+      id: "status",
+      name: "status",
+      logicalName: "Status",
+      type: "enum",
+      enumId: "missing",
+      nullable: false,
+      isPrimaryKey: false,
+      isForeignKey: false,
+      isUnique: false,
+    });
+    const schema = toNativeSchema(model);
+    const order = schema.collections.find((c) => c.id === "order");
+    const status = order?.attributes.find((a) => a.key === "status") as AppwriteAttributeDef;
+    expect(status.type).toBe("string");
+    expect(status.elements).toBeUndefined();
   });
 });

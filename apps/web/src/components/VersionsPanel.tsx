@@ -80,7 +80,12 @@ export function VersionsPanel() {
 
   const compareDiff = compareSnapshot ? diffModels(compareSnapshot, model) : null;
   const compareDiffCount = compareDiff
-    ? compareDiff.added.length + compareDiff.removed.length + compareDiff.changed.length
+    ? compareDiff.added.length +
+      compareDiff.removed.length +
+      compareDiff.changed.length +
+      compareDiff.enums.added.length +
+      compareDiff.enums.removed.length +
+      compareDiff.enums.changed.length
     : 0;
 
   return (
@@ -160,6 +165,21 @@ export function VersionsPanel() {
                     {compareDiff.changed.map((name) => (
                       <li key={`changed-${name}`} className="text-amber-600">
                         ~ {name} changed
+                      </li>
+                    ))}
+                    {compareDiff.enums.added.map((id) => (
+                      <li key={`enum-added-${id}`} className="text-green-700">
+                        + enum {model.enums.find((e) => e.id === id)?.name ?? id} created
+                      </li>
+                    ))}
+                    {compareDiff.enums.removed.map((id) => (
+                      <li key={`enum-removed-${id}`} className="text-red-600">
+                        - enum {compareSnapshot?.enums.find((e) => e.id === id)?.name ?? id} deleted
+                      </li>
+                    ))}
+                    {compareDiff.enums.changed.map((id) => (
+                      <li key={`enum-changed-${id}`} className="text-amber-600">
+                        ~ enum {model.enums.find((e) => e.id === id)?.name ?? id} changed
                       </li>
                     ))}
                   </ul>

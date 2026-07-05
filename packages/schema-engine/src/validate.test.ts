@@ -626,4 +626,93 @@ describe("validateModel", () => {
 
     expect(validateModel(model).map((i) => i.code)).not.toContain("domain-drift");
   });
+
+  it("warns on an enum-typed attribute with no enumId link", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Order",
+      physicalName: "order",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "status",
+          logicalName: "Status",
+          type: "enum",
+          nullable: false,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: false,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ code: "enum-not-linked", attributeId: "a1", severity: "warning" }),
+    );
+  });
+
+  it("flags an enum-typed attribute referencing a missing Enum", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Order",
+      physicalName: "order",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "status",
+          logicalName: "Status",
+          type: "enum",
+          enumId: "missing-enum",
+          nullable: false,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: false,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ code: "enum-not-found", attributeId: "a1", severity: "error" }),
+    );
+  });
+
+  it("does not flag an enum-typed attribute correctly linked to a real Enum", () => {
+    const model = emptyModel();
+    model.enums = [{ id: "e1", name: "OrderStatus", values: ["pending"] }];
+    model.entities.push({
+      id: "e1",
+      logicalName: "Order",
+      physicalName: "order",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "status",
+          logicalName: "Status",
+          type: "enum",
+          enumId: "e1",
+          nullable: false,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: false,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    const codes = validateModel(model).map((i) => i.code);
+    expect(codes).not.toContain("enum-not-linked");
+    expect(codes).not.toContain("enum-not-found");
+  });
 });
