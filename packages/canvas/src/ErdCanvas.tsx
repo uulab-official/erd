@@ -96,7 +96,7 @@ export function modelToNodes(model: Model): Node<EntityNodeData>[] {
     id: entity.id,
     type: "entity",
     position: { x: entity.ui.x, y: entity.ui.y },
-    data: { entity },
+    data: { entity, enums: model.enums },
   }));
 }
 

@@ -41,13 +41,13 @@ const model: Model = {
 };
 
 describe("modelToNodes", () => {
-  it("maps entity ui position onto the node and passes the entity through as data", () => {
+  it("maps entity ui position onto the node and passes the entity + Model.enums through as data", () => {
     expect(modelToNodes(model)).toEqual([
       {
         id: "customer",
         type: "entity",
         position: { x: 100, y: 200 },
-        data: { entity: model.entities[0] },
+        data: { entity: model.entities[0], enums: model.enums },
       },
     ]);
   });

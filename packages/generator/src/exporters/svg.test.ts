@@ -104,6 +104,42 @@ describe("renderSvg", () => {
     expect(svg).toContain(">string(255)<"); // email is nullable, no trailing '*'
   });
 
+  it("renders the linked EnumType's name instead of the bare 'enum' literal", () => {
+    const model = shopModel();
+    model.enums = [{ id: "e1", name: "OrderStatus", values: ["pending", "shipped"] }];
+    model.entities[1]!.attributes.push({
+      id: "status",
+      name: "status",
+      logicalName: "Status",
+      type: "enum",
+      enumId: "e1",
+      nullable: false,
+      isPrimaryKey: false,
+      isForeignKey: false,
+      isUnique: false,
+    });
+    const svg = renderSvg(model);
+    expect(svg).toContain(">enum(OrderStatus)*<");
+    expect(svg).not.toContain(">enum*<");
+  });
+
+  it("falls back to '?' for an enum-typed attribute whose enumId doesn't resolve", () => {
+    const model = shopModel();
+    model.entities[1]!.attributes.push({
+      id: "status",
+      name: "status",
+      logicalName: "Status",
+      type: "enum",
+      enumId: "missing",
+      nullable: false,
+      isPrimaryKey: false,
+      isForeignKey: false,
+      isUnique: false,
+    });
+    const svg = renderSvg(model);
+    expect(svg).toContain(">enum(?)*<");
+  });
+
   it("draws one relationship line with a name+cardinality label and an arrowhead marker", () => {
     const svg = renderSvg(shopModel());
     expect(svg.match(/marker-end="url\(#arrow\)"/g)).toHaveLength(1);

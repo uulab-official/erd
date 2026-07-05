@@ -59,7 +59,7 @@ function entityBox(entity: Entity): Box {
   return { x: entity.ui.x, y: entity.ui.y, width: ENTITY_WIDTH, height: entityHeight(entity) };
 }
 
-function renderEntity(entity: Entity): string {
+function renderEntity(model: Model, entity: Entity): string {
   const height = entityHeight(entity);
   const rows =
     entity.attributes.length === 0
@@ -82,7 +82,16 @@ function renderEntity(entity: Entity): string {
             }
             const nameColor = attr.isPrimaryKey ? COLOR.textPrimary : COLOR.textSecondary;
             const nameWeight = attr.isPrimaryKey ? "600" : "400";
-            const typeLabel = attr.length ? `${attr.type}(${attr.length})` : attr.type;
+            // A bare "enum" tells a diagram viewer nothing about which enum or its
+            // allowed values — same class of gap fixed for the code generators/SQL DDL
+            // (attribute.enumId resolved against model.enums there too). "?" mirrors
+            // EntityNode.tsx's fallback for a dangling enumId.
+            const typeLabel =
+              attr.type === "enum"
+                ? `enum(${model.enums.find((e) => e.id === attr.enumId)?.name ?? "?"})`
+                : attr.length
+                  ? `${attr.type}(${attr.length})`
+                  : attr.type;
             const nullableMark = attr.nullable ? "" : "*";
             return `
               ${i > 0 ? `<line x1="0" y1="${rowY}" x2="${ENTITY_WIDTH}" y2="${rowY}" stroke="${COLOR.rowDivider}" />` : ""}
@@ -274,7 +283,7 @@ export function renderSvg(model: Model): string {
     <rect x="${viewMinX}" y="${viewMinY}" width="${width}" height="${height}" fill="white" />
     ${renderSubjectAreas(model)}
     ${renderRelationships(model)}
-    ${model.entities.map(renderEntity).join("")}
+    ${model.entities.map((entity) => renderEntity(model, entity)).join("")}
     ${renderMemos(model)}
   </svg>`;
 }

@@ -1,8 +1,11 @@
 import { Handle, Position, type NodeProps } from "reactflow";
-import type { Entity } from "@modelforge/schema-engine";
+import type { Entity, EnumType } from "@modelforge/schema-engine";
 
 export interface EntityNodeData {
   entity: Entity;
+  // Only the EnumTypes this entity's attributes could reference — enough to resolve an
+  // enum-typed attribute's linked name for display without threading the whole Model in.
+  enums: EnumType[];
 }
 
 const HANDLE_CLASS = "!h-2 !w-2 !border !border-slate-400 !bg-white";
@@ -11,7 +14,7 @@ const HANDLE_CLASS = "!h-2 !w-2 !border !border-slate-400 !bg-white";
 // and every attribute, with small PK/FK tags. Handles on all four sides so a relationship
 // can attach from whichever direction reads best given where the two entities end up.
 export function EntityNode({ data, selected }: NodeProps<EntityNodeData>) {
-  const { entity } = data;
+  const { entity, enums } = data;
 
   return (
     <div
@@ -55,7 +58,9 @@ export function EntityNode({ data, selected }: NodeProps<EntityNodeData>) {
               {attribute.name}
             </span>
             <span className="ml-auto shrink-0 text-slate-400">
-              {attribute.type}
+              {attribute.type === "enum"
+                ? `enum(${enums.find((e) => e.id === attribute.enumId)?.name ?? "?"})`
+                : attribute.type}
               {!attribute.nullable && <span className="text-slate-500">*</span>}
             </span>
           </li>
