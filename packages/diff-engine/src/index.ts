@@ -14,6 +14,12 @@ export interface EntityDiff extends KeyedDiff {
   // Deploy Plan (which independently resolves enumId via toNativeSchema) would show a
   // step for it. Same shape as the entity diff, keyed by EnumType.id.
   enums: KeyedDiff;
+  // Relationships drive real FK/relationship-attribute DDL (both SQL and Appwrite
+  // adapters) and generator output (Prisma/GraphQL/SVG/Markdown/Mermaid) — a
+  // relationship-only edit (rename, cardinality/kind/optionality change, endpoint swap)
+  // touches no Entity, so it was previously invisible here even though Deploy Plan
+  // would show a step for it. Keyed by Relationship.id.
+  relationships: KeyedDiff;
 }
 
 function diffByKey<T>(itemsA: T[], itemsB: T[], keyOf: (item: T) => string): KeyedDiff {
@@ -32,9 +38,9 @@ function diffByKey<T>(itemsA: T[], itemsB: T[], keyOf: (item: T) => string): Key
   return { added, removed, changed };
 }
 
-// Phase 1: entity-level added/removed/changed by physicalName, ignoring `ui`, plus a
-// top-level Enum diff (Enums have no `ui` to strip). Attribute/relationship-level
-// diffing lands with the Deploy Engine migration planner.
+// Phase 1: entity-level added/removed/changed by physicalName, ignoring `ui`, plus
+// top-level Enum and Relationship diffs (neither has a `ui` to strip). Attribute-level
+// diffing (within an unchanged entity) lands with the Deploy Engine migration planner.
 export function diffModels(a: Model, b: Model): EntityDiff {
   const namesA = new Map(a.entities.map((e) => [e.physicalName, e]));
   const namesB = new Map(b.entities.map((e) => [e.physicalName, e]));
@@ -51,5 +57,11 @@ export function diffModels(a: Model, b: Model): EntityDiff {
     );
   });
 
-  return { added, removed, changed, enums: diffByKey(a.enums, b.enums, (e) => e.id) };
+  return {
+    added,
+    removed,
+    changed,
+    enums: diffByKey(a.enums, b.enums, (e) => e.id),
+    relationships: diffByKey(a.relationships, b.relationships, (r) => r.id),
+  };
 }
