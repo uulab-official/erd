@@ -93,4 +93,15 @@ describe("createPostgresDialect", () => {
       dialect.columnDDL({ name: "id", type: "bigint", nullable: false, autoIncrement: true }),
     ).toBe('"id" bigserial NOT NULL');
   });
+
+  it("renders a CHECK constraint for checkValues, escaping embedded quotes", () => {
+    expect(
+      dialect.columnDDL({
+        name: "status",
+        type: "text",
+        nullable: false,
+        checkValues: ["pending", "in progress", "it's done"],
+      }),
+    ).toBe(`"status" text NOT NULL CHECK ("status" IN ('pending', 'in progress', 'it''s done'))`);
+  });
 });

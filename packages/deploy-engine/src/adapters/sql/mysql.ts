@@ -33,6 +33,10 @@ export function createMySqlDialect(): SqlDialect {
     if (varchar) return { type: "string", length: Number(varchar[1]) };
     const decimal = /^decimal\((\d+),\s*(\d+)\)$/.exec(sqlType);
     if (decimal) return { type: "float", length: Number(decimal[1]), scale: Number(decimal[2]) };
+    // enum(...)'s member values aren't recoverable here (ReverseMappedType has nowhere
+    // to carry them, and there's no Model.enums to link back to from bare SQL) — callers
+    // needing the real values would have to introspect the column's values separately.
+    if (/^enum\(.*\)$/i.test(sqlType)) return { type: "enum" };
     switch (sqlType) {
       case "char(36)":
         return { type: "uuid" };
@@ -60,5 +64,7 @@ export function createMySqlDialect(): SqlDialect {
     mapType,
     mapTypeBack,
     autoIncrementSuffix: " AUTO_INCREMENT",
+    enumColumnType: (values) =>
+      `enum(${values.map((v) => `'${v.replace(/'/g, "''")}'`).join(", ")})`,
   });
 }

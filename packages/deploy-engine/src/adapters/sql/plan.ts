@@ -91,6 +91,18 @@ export function planSqlDeployment(
             }).`,
           );
         }
+        // A CHECK-constraint dialect's ALTER COLUMN ... TYPE statement only ever repeats
+        // the same base type (e.g. "text" -> "text") when just the linked EnumType's
+        // allowed values changed — the constraint itself isn't part of `column.type`, so
+        // this step would silently no-op the actual change. Same "don't guess, warn"
+        // policy as the auto-increment case above.
+        if (
+          JSON.stringify(existing.checkValues ?? []) !== JSON.stringify(column.checkValues ?? [])
+        ) {
+          warnings.push(
+            "Changing this column's allowed enum values isn't captured by this statement — drop and recreate the CHECK constraint manually.",
+          );
+        }
         steps.push({
           action: "alter-attribute",
           target: `${table.name}.${column.name}`,

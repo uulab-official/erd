@@ -120,6 +120,43 @@ describe("planSqlDeployment", () => {
     const idStep = plan.steps.find((s) => s.target === "customer.id");
     expect(idStep?.warning).not.toMatch(/auto-increment/i);
   });
+
+  it("warns when an enum column's allowed values change, since the ALTER statement can't express it", () => {
+    const entityWithEnum = () => ({
+      ...customerEntity(),
+      attributes: [
+        ...customerEntity().attributes,
+        {
+          id: "customer_status",
+          name: "status",
+          logicalName: "Status",
+          type: "enum" as const,
+          enumId: "e1",
+          nullable: false,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: false,
+        },
+      ],
+    });
+    const deployed: Model = {
+      id: "shop",
+      name: "Shop",
+      adapter: "postgresql",
+      entities: [entityWithEnum()],
+      relationships: [],
+      views: [],
+      sequences: [],
+      enums: [{ id: "e1", name: "Status", values: ["pending"] }],
+    };
+    const current: Model = {
+      ...deployed,
+      enums: [{ id: "e1", name: "Status", values: ["pending", "shipped"] }],
+    };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const statusStep = plan.steps.find((s) => s.target === "customer.status");
+    expect(statusStep?.warning).toMatch(/enum values.*isn't captured/i);
+  });
 });
 
 describe("rollbackSqlPlan", () => {

@@ -17,13 +17,25 @@ function toTable(entity: Entity, model: Model, dialect: SqlDialect): SqlTableDef
         )
       : undefined;
 
-  const columns = entity.attributes.map((attr) => ({
-    name: attr.name,
-    type: dialect.mapType(attr.type, attr.length, attr.scale),
-    nullable: attr.nullable,
-    default: attr.default ?? null,
-    ...(attr.id === soleAutoIncrementAttribute?.id ? { autoIncrement: true } : {}),
-  }));
+  const columns = entity.attributes.map((attr) => {
+    // A linked EnumType's actual allowed values — falling back to the dialect's plain
+    // enum->text/varchar mapping (no constraint at all) silently accepts any string,
+    // the same class of bug the auto-increment fix above addressed for integer PKs.
+    const enumType =
+      attr.type === "enum" ? model.enums.find((e) => e.id === attr.enumId) : undefined;
+    const type =
+      enumType && dialect.enumColumnType
+        ? dialect.enumColumnType(enumType.values)
+        : dialect.mapType(attr.type, attr.length, attr.scale);
+    return {
+      name: attr.name,
+      type,
+      nullable: attr.nullable,
+      default: attr.default ?? null,
+      ...(enumType && !dialect.enumColumnType ? { checkValues: enumType.values } : {}),
+      ...(attr.id === soleAutoIncrementAttribute?.id ? { autoIncrement: true } : {}),
+    };
+  });
 
   const indexes = entity.indexes.map((index) => ({
     name: index.name,

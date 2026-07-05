@@ -19,6 +19,13 @@ describe("createMySqlDialect", () => {
     expect(dialect.mapTypeBack("char(36)")).toEqual({ type: "uuid" });
     expect(dialect.mapTypeBack("tinyint(1)")).toEqual({ type: "boolean" });
     expect(dialect.mapTypeBack("decimal(10, 2)")).toEqual({ type: "float", length: 10, scale: 2 });
+    expect(dialect.mapTypeBack("enum('a', 'b')")).toEqual({ type: "enum" });
+  });
+
+  it("renders a native enum(...) column type, escaping embedded quotes", () => {
+    expect(dialect.enumColumnType?.(["pending", "it's done"])).toBe(
+      "enum('pending', 'it''s done')",
+    );
   });
 
   it("quotes identifiers with backticks", () => {

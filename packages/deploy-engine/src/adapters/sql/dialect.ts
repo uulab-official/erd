@@ -22,6 +22,10 @@ export interface SqlDialect {
   // information_schema types, not by parsing rendered DDL text — this is that reverse
   // half of mapType, used by fromNativeSchema.
   mapTypeBack(sqlType: string): ReverseMappedType;
+  // Only MySQL implements this (its native `enum(...)` column type) — toNativeSchema
+  // falls back to the dialect's plain enum->text mapping plus a CHECK constraint
+  // (SqlColumnDef.checkValues) when this is absent.
+  enumColumnType?(values: string[]): string;
   columnDDL(column: SqlColumnDef): string;
   createTableDDL(table: SqlTableDef): string;
   createIndexDDL(index: SqlIndexDef, tableName: string): string;
@@ -35,6 +39,15 @@ function formatDefault(value: SqlColumnDef["default"]): string {
   if (typeof value === "string") return ` DEFAULT '${value.replace(/'/g, "''")}'`;
   if (typeof value === "boolean") return ` DEFAULT ${value ? "TRUE" : "FALSE"}`;
   return ` DEFAULT ${value}`;
+}
+
+function formatCheckClause(
+  column: SqlColumnDef,
+  quoteIdentifier: (name: string) => string,
+): string {
+  if (!column.checkValues || column.checkValues.length === 0) return "";
+  const values = column.checkValues.map((v) => `'${v.replace(/'/g, "''")}'`).join(", ");
+  return ` CHECK (${quoteIdentifier(column.name)} IN (${values}))`;
 }
 
 function referentialActionSql(action: SqlForeignKeyDef["onDelete"]): string {
@@ -65,6 +78,9 @@ export interface SqlDialectOptions {
   // declared "INTEGER PRIMARY KEY AUTOINCREMENT" inline, replacing both the plain
   // column line and the separate PRIMARY KEY (...) table constraint for that column.
   inlinePrimaryKeyOnAutoIncrement?: boolean;
+  // MySQL: native `enum(...)` column type. Dialects without one (PostgreSQL/SQLite) omit
+  // this and toNativeSchema falls back to a CHECK constraint instead.
+  enumColumnType?(values: string[]): string;
 }
 
 // Generic implementation of columnDDL/createTableDDL/createIndexDDL/foreignKeyDDL shared
@@ -78,19 +94,21 @@ export function createSqlDialect(options: SqlDialectOptions): SqlDialect {
     autoIncrementType,
     autoIncrementSuffix,
     inlinePrimaryKeyOnAutoIncrement,
+    enumColumnType,
   } = options;
 
   const columnDDL: SqlDialect["columnDDL"] = (column) => {
+    const checkClause = formatCheckClause(column, quoteIdentifier);
     if (column.autoIncrement && inlinePrimaryKeyOnAutoIncrement) {
       // SQLite: type + PRIMARY KEY + AUTOINCREMENT all live on the column itself; the
       // caller (createTableDDL) omits this column from the separate PRIMARY KEY (...)
       // line so it isn't declared twice.
-      return `${quoteIdentifier(column.name)} ${column.type} PRIMARY KEY AUTOINCREMENT`;
+      return `${quoteIdentifier(column.name)} ${column.type} PRIMARY KEY AUTOINCREMENT${checkClause}`;
     }
     const type =
       column.autoIncrement && autoIncrementType ? autoIncrementType(column.type) : column.type;
     const suffix = column.autoIncrement && autoIncrementSuffix ? autoIncrementSuffix : "";
-    return `${quoteIdentifier(column.name)} ${type}${column.nullable ? "" : " NOT NULL"}${formatDefault(column.default)}${suffix}`;
+    return `${quoteIdentifier(column.name)} ${type}${column.nullable ? "" : " NOT NULL"}${formatDefault(column.default)}${suffix}${checkClause}`;
   };
 
   const inlineForeignKeyDDL = (fk: SqlForeignKeyDef): string =>
@@ -128,6 +146,7 @@ export function createSqlDialect(options: SqlDialectOptions): SqlDialect {
     quoteIdentifier,
     mapType: options.mapType,
     mapTypeBack: options.mapTypeBack,
+    ...(enumColumnType ? { enumColumnType } : {}),
     columnDDL,
     createTableDDL,
     createIndexDDL,

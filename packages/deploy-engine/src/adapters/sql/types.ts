@@ -14,6 +14,11 @@ export interface SqlColumnDef {
   // "INTEGER PRIMARY KEY AUTOINCREMENT"), so the flag travels on the column rather than
   // being resolved to dialect-specific DDL text this early.
   autoIncrement?: boolean;
+  // The linked EnumType's allowed values, set only when the dialect has no native enum
+  // column type (see SqlDialect.enumColumnType) — columnDDL renders these as a
+  // `CHECK (col IN (...))` clause. When the dialect *does* have a native enum type
+  // (MySQL's `enum(...)`), the values are baked into `type` instead and this is omitted.
+  checkValues?: string[];
 }
 
 export interface SqlIndexDef {
