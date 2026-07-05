@@ -102,13 +102,16 @@ function splitSettings(body: string): string[] {
 
 function parseColumnType(
   raw: string,
-  enumNames: Set<string>,
-): { type: ColumnType; length?: number; scale?: number } {
+  // lookup key (exact or lowercased enum name) -> EnumType id, so the attribute can be
+  // linked back to the Enum block it references, not just typed as a bare "enum".
+  enumIdsByName: Map<string, string>,
+): { type: ColumnType; length?: number; scale?: number; enumId?: string } {
   const match = /^([\w.]+)(?:\((\d+)(?:\s*,\s*(\d+))?\))?$/.exec(raw.trim());
   if (!match) return { type: "string" };
   const [, name, lengthRaw, scaleRaw] = match;
   const lower = name!.toLowerCase();
-  if (enumNames.has(name!) || enumNames.has(lower)) return { type: "enum" };
+  const enumId = enumIdsByName.get(name!) ?? enumIdsByName.get(lower);
+  if (enumId !== undefined) return { type: "enum", enumId };
   const mapped = TYPE_MAP[lower] ?? "string";
   const length = lengthRaw !== undefined ? Number(lengthRaw) : undefined;
   const scale = scaleRaw !== undefined ? Number(scaleRaw) : undefined;
@@ -152,7 +155,7 @@ export function parseDbml(source: string): Model {
   const lines = text.split("\n");
 
   const enums: Model["enums"] = [];
-  const enumNames = new Set<string>();
+  const enumIdsByName = new Map<string, string>();
 
   // Pass 1: collect enum names so pass 2 can type columns against them.
   for (let i = 0; i < lines.length; i++) {
@@ -165,8 +168,8 @@ export function parseDbml(source: string): Model {
       if (value && lines[i]!.trim()) values.push(unquote(value[1]!));
     }
     enums.push({ id: name, name, values });
-    enumNames.add(name);
-    enumNames.add(name.toLowerCase());
+    enumIdsByName.set(name, name);
+    enumIdsByName.set(name.toLowerCase(), name);
   }
 
   const entities: Entity[] = [];
@@ -226,7 +229,7 @@ export function parseDbml(source: string): Model {
       if (!columnMatch) continue;
 
       const columnName = unquote(columnMatch[1]!);
-      const { type, length, scale } = parseColumnType(columnMatch[2]!, enumNames);
+      const { type, length, scale, enumId } = parseColumnType(columnMatch[2]!, enumIdsByName);
       const settings = columnMatch[3] ? splitSettings(columnMatch[3]) : [];
 
       const attribute: Attribute = {
@@ -236,6 +239,7 @@ export function parseDbml(source: string): Model {
         type,
         length,
         scale,
+        enumId,
         nullable: true,
         isPrimaryKey: false,
         isForeignKey: false,

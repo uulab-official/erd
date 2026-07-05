@@ -79,6 +79,12 @@ describe("parseDbml", () => {
     expect(model.entities[1]!.attributes.find((a) => a.name === "status")?.type).toBe("enum");
   });
 
+  it("links an enum column to its EnumType via enumId, not just the bare type", () => {
+    expect(model.entities[1]!.attributes.find((a) => a.name === "status")?.enumId).toBe(
+      "order_status",
+    );
+  });
+
   it("builds one-to-many relationships from inline refs, marking the FK", () => {
     const rel = model.relationships.find((r) => r.targetEntityId === "orders");
     expect(rel).toMatchObject({

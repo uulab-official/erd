@@ -13,10 +13,26 @@ export function renderMarkdown(model: Model): string {
     lines.push("", "| Attribute | Type | Nullable | Key | Comment |", "|---|---|---|---|---|");
     for (const attr of entity.attributes) {
       const key = attr.isPrimaryKey ? "PK" : attr.isForeignKey ? "FK" : "";
-      const type = attr.length ? `${attr.type}(${attr.length})` : attr.type;
+      // enum(Name) instead of the bare "enum" literal — a data dictionary is exactly
+      // where a reader needs to know which enum constrains the column (its values are
+      // listed in the "## Enums" section below).
+      const type =
+        attr.type === "enum"
+          ? `enum(${model.enums.find((e) => e.id === attr.enumId)?.name ?? "?"})`
+          : attr.length
+            ? `${attr.type}(${attr.length})`
+            : attr.type;
       lines.push(
         `| ${attr.name} | ${type} | ${attr.nullable ? "yes" : "no"} | ${key} | ${attr.comment ?? ""} |`,
       );
+    }
+    lines.push("");
+  }
+
+  if (model.enums.length > 0) {
+    lines.push("## Enums", "", "| Enum | Values |", "|---|---|");
+    for (const enumType of model.enums) {
+      lines.push(`| ${enumType.name} | ${enumType.values.join(", ")} |`);
     }
     lines.push("");
   }

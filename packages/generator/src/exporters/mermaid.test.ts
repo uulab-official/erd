@@ -145,6 +145,40 @@ describe("renderMermaid", () => {
     model.relationships = [{ ...model.relationships[0]!, targetEntityId: "missing" }];
     expect(renderMermaid(model)).not.toContain("undefined");
   });
+
+  it("uses the linked EnumType's name as an enum column's type", () => {
+    const model = shopModel();
+    model.enums = [{ id: "e1", name: "order status", values: ["pending"] }];
+    model.entities[1]!.attributes.push({
+      id: "status",
+      name: "status",
+      logicalName: "Status",
+      type: "enum",
+      enumId: "e1",
+      nullable: false,
+      isPrimaryKey: false,
+      isForeignKey: false,
+      isUnique: false,
+    });
+    // Whitespace in the enum name still goes through mermaidType's underscore fold.
+    expect(renderMermaid(model)).toContain("order_status status");
+  });
+
+  it("keeps the bare enum type when enumId doesn't resolve", () => {
+    const model = shopModel();
+    model.entities[1]!.attributes.push({
+      id: "status",
+      name: "status",
+      logicalName: "Status",
+      type: "enum",
+      enumId: "missing",
+      nullable: false,
+      isPrimaryKey: false,
+      isForeignKey: false,
+      isUnique: false,
+    });
+    expect(renderMermaid(model)).toContain("enum status");
+  });
 });
 
 describe("mermaidExporter", () => {

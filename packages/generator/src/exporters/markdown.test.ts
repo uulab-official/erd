@@ -74,6 +74,38 @@ describe("renderMarkdown", () => {
     model.relationships = [];
     expect(renderMarkdown(model)).not.toContain("## Relationships");
   });
+
+  function modelWithEnumAttribute(): Model {
+    const model = shopModel();
+    model.enums = [{ id: "e1", name: "OrderStatus", values: ["pending", "shipped"] }];
+    model.entities[0]!.attributes.push({
+      id: "status",
+      name: "status",
+      logicalName: "Status",
+      type: "enum",
+      enumId: "e1",
+      nullable: false,
+      isPrimaryKey: false,
+      isForeignKey: false,
+      isUnique: false,
+    });
+    return model;
+  }
+
+  it("shows the linked enum's name in the Type column and lists its values in an Enums section", () => {
+    const md = renderMarkdown(modelWithEnumAttribute());
+    expect(md).toContain("| status | enum(OrderStatus) | no |  |");
+    expect(md).toContain("## Enums");
+    expect(md).toContain("| OrderStatus | pending, shipped |");
+  });
+
+  it("falls back to enum(?) when enumId doesn't resolve, and omits the Enums section when Model.enums is empty", () => {
+    const model = modelWithEnumAttribute();
+    model.enums = [];
+    const md = renderMarkdown(model);
+    expect(md).toContain("| status | enum(?) |");
+    expect(md).not.toContain("## Enums");
+  });
 });
 
 describe("markdownExporter", () => {

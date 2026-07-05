@@ -48,7 +48,15 @@ export function renderMermaid(model: Model): string {
     lines.push(`  ${entity.physicalName} {`);
     for (const attr of entity.attributes) {
       const markers = keyMarkers(attr);
-      lines.push(`    ${mermaidType(attr.type)} ${attr.name}${markers ? ` ${markers}` : ""}`);
+      // An enum-typed attribute shows its linked EnumType's name as the column type —
+      // the same convention DBML uses (`order_status status`), and what our own DBML
+      // importer maps back to type "enum" + enumId. Parens aren't Mermaid-safe, so no
+      // "enum(Name)" wrapper here; a dangling enumId keeps the bare "enum".
+      const typeName =
+        attr.type === "enum"
+          ? (model.enums.find((e) => e.id === attr.enumId)?.name ?? "enum")
+          : attr.type;
+      lines.push(`    ${mermaidType(typeName)} ${attr.name}${markers ? ` ${markers}` : ""}`);
     }
     lines.push("  }");
   }
