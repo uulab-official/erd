@@ -27,7 +27,10 @@ export function BottomPanel() {
     diff.changed.length +
     diff.enums.added.length +
     diff.enums.removed.length +
-    diff.enums.changed.length;
+    diff.enums.changed.length +
+    diff.relationships.added.length +
+    diff.relationships.removed.length +
+    diff.relationships.changed.length;
 
   async function handleDeploy() {
     const destructiveCount = plan.steps.filter((s) => s.destructive).length;
@@ -117,6 +120,22 @@ export function BottomPanel() {
             {diff.enums.changed.map((id) => (
               <li key={`enum-changed-${id}`} className="text-amber-600">
                 ~ enum {model.enums.find((e) => e.id === id)?.name ?? id} changed
+              </li>
+            ))}
+            {diff.relationships.added.map((id) => (
+              <li key={`rel-added-${id}`} className="text-green-700">
+                + relationship {model.relationships.find((r) => r.id === id)?.name ?? id} created
+              </li>
+            ))}
+            {diff.relationships.removed.map((id) => (
+              <li key={`rel-removed-${id}`} className="text-red-600">
+                - relationship {savedModel.relationships.find((r) => r.id === id)?.name ?? id}{" "}
+                deleted
+              </li>
+            ))}
+            {diff.relationships.changed.map((id) => (
+              <li key={`rel-changed-${id}`} className="text-amber-600">
+                ~ relationship {model.relationships.find((r) => r.id === id)?.name ?? id} changed
               </li>
             ))}
           </ul>
