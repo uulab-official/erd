@@ -86,18 +86,24 @@ function renderEntity(model: Model, entity: Entity): string {
             // allowed values — same class of gap fixed for the code generators/SQL DDL
             // (attribute.enumId resolved against model.enums there too). "?" mirrors
             // EntityNode.tsx's fallback for a dangling enumId.
-            const typeLabel =
+            const baseTypeLabel =
               attr.type === "enum"
                 ? `enum(${model.enums.find((e) => e.id === attr.enumId)?.name ?? "?"})`
                 : attr.length
                   ? `${attr.type}(${attr.length})`
                   : attr.type;
+            // Domain-governed attributes get a "[Name]" suffix — the diagram-visibility
+            // counterpart to canvas's brand-colored Domain badge (EntityNode.tsx).
+            const domainSuffix = attr.domainId
+              ? ` [${model.domains?.find((d) => d.id === attr.domainId)?.name ?? "?"}]`
+              : "";
             const nullableMark = attr.nullable ? "" : "*";
+            const typeLabel = baseTypeLabel + nullableMark + domainSuffix;
             return `
               ${i > 0 ? `<line x1="0" y1="${rowY}" x2="${ENTITY_WIDTH}" y2="${rowY}" stroke="${COLOR.rowDivider}" />` : ""}
               ${badges}
               <text x="${badgeX}" y="${textY}" font-size="11" font-weight="${nameWeight}" fill="${nameColor}">${escapeXml(attr.name)}</text>
-              <text x="${ENTITY_WIDTH - 10}" y="${textY}" font-size="10" text-anchor="end" fill="${COLOR.textMuted}">${escapeXml(typeLabel)}${nullableMark}</text>`;
+              <text x="${ENTITY_WIDTH - 10}" y="${textY}" font-size="10" text-anchor="end" fill="${COLOR.textMuted}">${escapeXml(typeLabel)}</text>`;
           })
           .join("");
 

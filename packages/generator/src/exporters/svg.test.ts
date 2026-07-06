@@ -140,6 +140,21 @@ describe("renderSvg", () => {
     expect(svg).toContain(">enum(?)*<");
   });
 
+  it("appends the linked Domain's name to a Domain-governed attribute's type label", () => {
+    const model = shopModel();
+    model.domains = [{ id: "d1", name: "Email", type: "string", length: 320 }];
+    model.entities[0]!.attributes[1]!.domainId = "d1";
+    const svg = renderSvg(model);
+    expect(svg).toContain(">string(255) [Email]<");
+  });
+
+  it("falls back to '?' for a domain-governed attribute whose domainId doesn't resolve", () => {
+    const model = shopModel();
+    model.entities[0]!.attributes[1]!.domainId = "missing";
+    const svg = renderSvg(model);
+    expect(svg).toContain(">string(255) [?]<");
+  });
+
   it("draws one relationship line with a name+cardinality label and an arrowhead marker", () => {
     const svg = renderSvg(shopModel());
     expect(svg.match(/marker-end="url\(#arrow\)"/g)).toHaveLength(1);

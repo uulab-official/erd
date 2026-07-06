@@ -47,7 +47,7 @@ describe("modelToNodes", () => {
         id: "customer",
         type: "entity",
         position: { x: 100, y: 200 },
-        data: { entity: model.entities[0], enums: model.enums },
+        data: { entity: model.entities[0], enums: model.enums, domains: [] },
       },
     ]);
   });
