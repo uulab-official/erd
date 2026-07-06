@@ -20,6 +20,11 @@ export interface EntityDiff extends KeyedDiff {
   // touches no Entity, so it was previously invisible here even though Deploy Plan
   // would show a step for it. Keyed by Relationship.id.
   relationships: KeyedDiff;
+  // Sequences/Views drive real CREATE SEQUENCE/CREATE VIEW Deploy Plan steps (SQL
+  // adapter) — same "invisible here, but Deploy Plan sees it" gap as enums/relationships
+  // above, just for the two Model fields added alongside their Operations/DDL support.
+  sequences: KeyedDiff;
+  views: KeyedDiff;
 }
 
 function diffByKey<T>(itemsA: T[], itemsB: T[], keyOf: (item: T) => string): KeyedDiff {
@@ -63,5 +68,7 @@ export function diffModels(a: Model, b: Model): EntityDiff {
     changed,
     enums: diffByKey(a.enums, b.enums, (e) => e.id),
     relationships: diffByKey(a.relationships, b.relationships, (r) => r.id),
+    sequences: diffByKey(a.sequences, b.sequences, (s) => s.id),
+    views: diffByKey(a.views, b.views, (v) => v.id),
   };
 }

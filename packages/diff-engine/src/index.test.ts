@@ -51,6 +51,8 @@ describe("diffModels", () => {
       changed: [],
       enums: { added: [], removed: [], changed: [] },
       relationships: { added: [], removed: [], changed: [] },
+      sequences: { added: [], removed: [], changed: [] },
+      views: { added: [], removed: [], changed: [] },
     });
   });
 
@@ -94,5 +96,41 @@ describe("diffModels", () => {
     b.relationships = [relationship("r1")];
     expect(diffModels(a, b).relationships).toEqual({ added: ["r1"], removed: [], changed: [] });
     expect(diffModels(b, a).relationships).toEqual({ added: [], removed: ["r1"], changed: [] });
+  });
+
+  it("detects a Sequence's fields changing even when no entity/attribute changes", () => {
+    const a = model([entity("customer")]);
+    const b = model([entity("customer")]);
+    a.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];
+    b.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 5 }];
+    const diff = diffModels(a, b);
+    expect(diff.changed).toEqual([]); // no entity touched
+    expect(diff.sequences).toEqual({ added: [], removed: [], changed: ["s1"] });
+  });
+
+  it("detects a Sequence being added or removed", () => {
+    const a = model([entity("customer")]);
+    const b = model([entity("customer")]);
+    b.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];
+    expect(diffModels(a, b).sequences).toEqual({ added: ["s1"], removed: [], changed: [] });
+    expect(diffModels(b, a).sequences).toEqual({ added: [], removed: ["s1"], changed: [] });
+  });
+
+  it("detects a View's sql changing even when no entity/attribute changes", () => {
+    const a = model([entity("customer")]);
+    const b = model([entity("customer")]);
+    a.views = [{ id: "v1", name: "active_orders", sql: "SELECT * FROM orders" }];
+    b.views = [{ id: "v1", name: "active_orders", sql: "SELECT * FROM orders WHERE 1=1" }];
+    const diff = diffModels(a, b);
+    expect(diff.changed).toEqual([]); // no entity touched
+    expect(diff.views).toEqual({ added: [], removed: [], changed: ["v1"] });
+  });
+
+  it("detects a View being added or removed", () => {
+    const a = model([entity("customer")]);
+    const b = model([entity("customer")]);
+    b.views = [{ id: "v1", name: "active_orders", sql: "SELECT * FROM orders" }];
+    expect(diffModels(a, b).views).toEqual({ added: ["v1"], removed: [], changed: [] });
+    expect(diffModels(b, a).views).toEqual({ added: [], removed: ["v1"], changed: [] });
   });
 });

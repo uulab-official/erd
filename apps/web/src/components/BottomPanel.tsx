@@ -30,7 +30,13 @@ export function BottomPanel() {
     diff.enums.changed.length +
     diff.relationships.added.length +
     diff.relationships.removed.length +
-    diff.relationships.changed.length;
+    diff.relationships.changed.length +
+    diff.sequences.added.length +
+    diff.sequences.removed.length +
+    diff.sequences.changed.length +
+    diff.views.added.length +
+    diff.views.removed.length +
+    diff.views.changed.length;
 
   async function handleDeploy() {
     const destructiveCount = plan.steps.filter((s) => s.destructive).length;
@@ -136,6 +142,36 @@ export function BottomPanel() {
             {diff.relationships.changed.map((id) => (
               <li key={`rel-changed-${id}`} className="text-amber-600">
                 ~ relationship {model.relationships.find((r) => r.id === id)?.name ?? id} changed
+              </li>
+            ))}
+            {diff.sequences.added.map((id) => (
+              <li key={`seq-added-${id}`} className="text-green-700">
+                + sequence {model.sequences.find((s) => s.id === id)?.name ?? id} created
+              </li>
+            ))}
+            {diff.sequences.removed.map((id) => (
+              <li key={`seq-removed-${id}`} className="text-red-600">
+                - sequence {savedModel.sequences.find((s) => s.id === id)?.name ?? id} deleted
+              </li>
+            ))}
+            {diff.sequences.changed.map((id) => (
+              <li key={`seq-changed-${id}`} className="text-amber-600">
+                ~ sequence {model.sequences.find((s) => s.id === id)?.name ?? id} changed
+              </li>
+            ))}
+            {diff.views.added.map((id) => (
+              <li key={`view-added-${id}`} className="text-green-700">
+                + view {model.views.find((v) => v.id === id)?.name ?? id} created
+              </li>
+            ))}
+            {diff.views.removed.map((id) => (
+              <li key={`view-removed-${id}`} className="text-red-600">
+                - view {savedModel.views.find((v) => v.id === id)?.name ?? id} deleted
+              </li>
+            ))}
+            {diff.views.changed.map((id) => (
+              <li key={`view-changed-${id}`} className="text-amber-600">
+                ~ view {model.views.find((v) => v.id === id)?.name ?? id} changed
               </li>
             ))}
           </ul>
