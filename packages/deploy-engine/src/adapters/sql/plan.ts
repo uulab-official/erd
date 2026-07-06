@@ -21,11 +21,74 @@ export function planSqlDeployment(
   const currentSchema = toNativeSchema(current, dialect);
   const deployedSchema = deployedSnapshot
     ? toNativeSchema(deployedSnapshot, dialect)
-    : { tables: [] };
+    : { tables: [], sequences: [], views: [] };
   const steps: MigrationStep[] = [];
   const q = dialect.quoteIdentifier;
 
   const deployedByName = new Map(deployedSchema.tables.map((t) => [t.name, t]));
+
+  const deployedSequenceNames = new Set(deployedSchema.sequences.map((s) => s.name));
+  for (const sequence of currentSchema.sequences) {
+    if (deployedSequenceNames.has(sequence.name)) continue;
+    const step: MigrationStep = {
+      action: "create-sequence",
+      target: sequence.name,
+      sql: dialect.createSequenceDDL(sequence),
+      destructive: false,
+    };
+    // supportsSequences === false means createSequenceDDL returned "" above — don't
+    // guess at MySQL/SQLite syntax for a concept they have no native equivalent of, the
+    // same policy already used for SQLite's FK-ALTER limitation.
+    if (!dialect.supportsSequences) {
+      step.warning = `${dialect.name} has no native sequence object — model auto-increment on the column itself instead, or manage this sequence outside ModelForge.`;
+    }
+    steps.push(step);
+  }
+  const currentSequenceNames = new Set(currentSchema.sequences.map((s) => s.name));
+  for (const sequence of deployedSchema.sequences) {
+    if (currentSequenceNames.has(sequence.name)) continue;
+    steps.push({
+      action: "drop-sequence",
+      target: sequence.name,
+      sql: dialect.dropSequenceDDL(sequence.name),
+      destructive: true,
+      warning: "This permanently deletes the sequence and its current counter value",
+    });
+  }
+
+  const deployedViewByName = new Map(deployedSchema.views.map((v) => [v.name, v]));
+  for (const view of currentSchema.views) {
+    const deployedView = deployedViewByName.get(view.name);
+    if (!deployedView) {
+      steps.push({
+        action: "create-view",
+        target: view.name,
+        sql: dialect.createViewDDL(view),
+        destructive: false,
+      });
+    } else if (deployedView.sql !== view.sql) {
+      // No dialect supports ALTER VIEW ... AS across the board (SQLite has none at all) —
+      // drop and recreate rather than guessing at dialect-specific ALTER VIEW syntax.
+      steps.push({
+        action: "create-view",
+        target: view.name,
+        sql: `${dialect.dropViewDDL(view.name)}\n${dialect.createViewDDL(view)}`,
+        destructive: false,
+        warning: "The view's query changed — this drops and recreates it",
+      });
+    }
+  }
+  const currentViewNames = new Set(currentSchema.views.map((v) => v.name));
+  for (const view of deployedSchema.views) {
+    if (!currentViewNames.has(view.name)) {
+      steps.push({
+        action: "drop-view",
+        target: view.name,
+        sql: dialect.dropViewDDL(view.name),
+        destructive: true,
+      });
+    }
+  }
 
   for (const table of currentSchema.tables) {
     const deployed = deployedByName.get(table.name);
@@ -229,6 +292,15 @@ function rollbackStep(step: MigrationStep): MigrationStep {
       return { action: "drop-relationship", target: step.target, destructive: true };
     case "create-index":
       return { action: "drop-index", target: step.target, destructive: false };
+    case "create-sequence":
+      return {
+        action: "drop-sequence",
+        target: step.target,
+        destructive: true,
+        warning: "Rolling back a create-sequence permanently deletes the sequence",
+      };
+    case "create-view":
+      return { action: "drop-view", target: step.target, destructive: true };
     default:
       return {
         ...step,

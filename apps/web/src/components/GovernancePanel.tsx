@@ -3,7 +3,8 @@ import type { ColumnType, NamingRuleSet } from "@modelforge/schema-engine";
 import { Button, Card, Input, Select, Tabs } from "@modelforge/ui";
 import { useEditorStore } from "../store/useEditorStore.js";
 
-type GovernanceTab = "domains" | "dictionary" | "naming" | "subjectAreas" | "enums";
+type GovernanceTab =
+  "domains" | "dictionary" | "naming" | "subjectAreas" | "enums" | "sequences" | "views";
 
 const COLUMN_TYPES: ColumnType[] = [
   "string",
@@ -586,6 +587,150 @@ function EnumsSection() {
   );
 }
 
+function SequencesSection() {
+  const { model, createSequence, updateSequence, deleteSequence } = useEditorStore();
+  const sequences = model.sequences;
+  const [name, setName] = useState("");
+  const [start, setStart] = useState("1");
+  const [increment, setIncrement] = useState("1");
+
+  function handleCreate() {
+    if (!name.trim()) return;
+    createSequence({
+      id: crypto.randomUUID(),
+      name: name.trim(),
+      start: Number(start) || 1,
+      increment: Number(increment) || 1,
+    });
+    setName("");
+    setStart("1");
+    setIncrement("1");
+  }
+
+  return (
+    <div className="flex flex-col gap-3 p-4">
+      <div className="flex gap-2">
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Sequence name (e.g. order_seq)"
+          className="flex-1"
+        />
+        <Input
+          type="number"
+          value={start}
+          onChange={(e) => setStart(e.target.value)}
+          placeholder="Start"
+          className="w-24"
+        />
+        <Input
+          type="number"
+          value={increment}
+          onChange={(e) => setIncrement(e.target.value)}
+          placeholder="Increment"
+          className="w-24"
+        />
+        <Button variant="secondary" size="sm" onClick={handleCreate}>
+          Add Sequence
+        </Button>
+      </div>
+
+      {sequences.length === 0 && <p className="text-sm text-slate-400">No sequences yet.</p>}
+
+      <ul className="flex flex-col gap-2">
+        {sequences.map((sequence) => (
+          <Card key={sequence.id} as="li" className="flex items-center gap-2 p-3">
+            <span className="font-medium text-slate-900">{sequence.name}</span>
+            <Input
+              type="number"
+              defaultValue={sequence.start}
+              className="w-24"
+              onBlur={(e) => updateSequence(sequence.id, { start: Number(e.target.value) || 1 })}
+            />
+            <Input
+              type="number"
+              defaultValue={sequence.increment}
+              className="w-24"
+              onBlur={(e) =>
+                updateSequence(sequence.id, { increment: Number(e.target.value) || 1 })
+              }
+            />
+            <button
+              className="ml-auto text-sm text-red-600 hover:underline"
+              onClick={() => deleteSequence(sequence.id)}
+            >
+              Delete
+            </button>
+          </Card>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ViewsSection() {
+  const { model, createView, updateView, deleteView } = useEditorStore();
+  const views = model.views;
+  const [name, setName] = useState("");
+  const [sql, setSql] = useState("");
+
+  function handleCreate() {
+    if (!name.trim() || !sql.trim()) return;
+    createView({ id: crypto.randomUUID(), name: name.trim(), sql: sql.trim() });
+    setName("");
+    setSql("");
+  }
+
+  return (
+    <div className="flex flex-col gap-3 p-4">
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-2">
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="View name (e.g. active_orders)"
+            className="flex-1"
+          />
+          <Button variant="secondary" size="sm" onClick={handleCreate}>
+            Add View
+          </Button>
+        </div>
+        <textarea
+          value={sql}
+          onChange={(e) => setSql(e.target.value)}
+          placeholder="SELECT * FROM orders WHERE status = 'active'"
+          className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm font-mono focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          rows={2}
+        />
+      </div>
+
+      {views.length === 0 && <p className="text-sm text-slate-400">No views yet.</p>}
+
+      <ul className="flex flex-col gap-2">
+        {views.map((view) => (
+          <Card key={view.id} as="li" className="flex flex-col gap-2 p-3">
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-slate-900">{view.name}</span>
+              <button
+                className="ml-auto text-sm text-red-600 hover:underline"
+                onClick={() => deleteView(view.id)}
+              >
+                Delete
+              </button>
+            </div>
+            <textarea
+              defaultValue={view.sql ?? ""}
+              className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm font-mono focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              rows={2}
+              onBlur={(e) => updateView(view.id, { sql: e.target.value })}
+            />
+          </Card>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function GovernancePanel() {
   const [tab, setTab] = useState<GovernanceTab>("domains");
 
@@ -598,6 +743,8 @@ export function GovernancePanel() {
           { id: "naming", label: "Naming Rules" },
           { id: "subjectAreas", label: "Subject Areas" },
           { id: "enums", label: "Enums" },
+          { id: "sequences", label: "Sequences" },
+          { id: "views", label: "Views" },
         ]}
         activeId={tab}
         onChange={(id) => setTab(id as GovernanceTab)}
@@ -608,6 +755,8 @@ export function GovernancePanel() {
       {tab === "naming" && <NamingRulesSection />}
       {tab === "subjectAreas" && <SubjectAreasSection />}
       {tab === "enums" && <EnumsSection />}
+      {tab === "sequences" && <SequencesSection />}
+      {tab === "views" && <ViewsSection />}
     </div>
   );
 }

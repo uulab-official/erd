@@ -44,6 +44,12 @@ const LABELS: Record<OperationType, string> = {
   DeleteEnum: "Delete enum",
   AssignEnumToAttribute: "Assign enum to attribute",
   UnassignEnumFromAttribute: "Unassign enum from attribute",
+  CreateSequence: "Create sequence",
+  UpdateSequence: "Update sequence",
+  DeleteSequence: "Delete sequence",
+  CreateView: "Create view",
+  UpdateView: "Update view",
+  DeleteView: "Delete view",
 };
 
 // Human-readable label for a History Panel entry. Transactions already carry their own

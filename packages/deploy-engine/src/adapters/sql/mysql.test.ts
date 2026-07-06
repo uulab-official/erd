@@ -37,6 +37,19 @@ describe("createMySqlDialect", () => {
     expect(dialect.supportsAlterForeignKey).toBe(true);
   });
 
+  it("has no native sequence object, unlike PostgreSQL", () => {
+    expect(dialect.supportsSequences).toBe(false);
+    expect(dialect.createSequenceDDL({ name: "order_seq", start: 1, increment: 1 })).toBe("");
+    expect(dialect.dropSequenceDDL("order_seq")).toBe("");
+  });
+
+  it("renders CREATE VIEW/DROP VIEW with backtick quoting", () => {
+    expect(dialect.createViewDDL({ name: "active_orders", sql: "SELECT * FROM orders" })).toBe(
+      "CREATE VIEW `active_orders` AS SELECT * FROM orders;",
+    );
+    expect(dialect.dropViewDDL("active_orders")).toBe("DROP VIEW `active_orders`;");
+  });
+
   it("renders a full schema via the shared createTableDDL/renderSql machinery", () => {
     const sql = renderSql(toNativeSchema(shopModel(), dialect), dialect);
     expect(sql).toContain("CREATE TABLE `customer`");

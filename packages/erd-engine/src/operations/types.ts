@@ -10,7 +10,9 @@ import type {
   Memo,
   NamingRuleSet,
   Relationship,
+  Sequence,
   SubjectArea,
+  View,
 } from "@modelforge/schema-engine";
 
 export interface CreateEntityPayload {
@@ -213,6 +215,28 @@ export interface UnassignEnumFromAttributePayload {
   type?: ColumnType;
 }
 
+export interface CreateSequencePayload {
+  sequence: Sequence;
+}
+export interface UpdateSequencePayload {
+  sequenceId: string;
+  changes: Partial<Pick<Sequence, "name" | "start" | "increment">>;
+}
+export interface DeleteSequencePayload {
+  sequenceId: string;
+}
+
+export interface CreateViewPayload {
+  view: View;
+}
+export interface UpdateViewPayload {
+  viewId: string;
+  changes: Partial<Pick<View, "name" | "sql">>;
+}
+export interface DeleteViewPayload {
+  viewId: string;
+}
+
 export interface OperationPayloadMap {
   CreateEntity: CreateEntityPayload;
   DeleteEntity: DeleteEntityPayload;
@@ -255,6 +279,12 @@ export interface OperationPayloadMap {
   DeleteEnum: DeleteEnumPayload;
   AssignEnumToAttribute: AssignEnumToAttributePayload;
   UnassignEnumFromAttribute: UnassignEnumFromAttributePayload;
+  CreateSequence: CreateSequencePayload;
+  UpdateSequence: UpdateSequencePayload;
+  DeleteSequence: DeleteSequencePayload;
+  CreateView: CreateViewPayload;
+  UpdateView: UpdateViewPayload;
+  DeleteView: DeleteViewPayload;
 }
 
 export type OperationType = keyof OperationPayloadMap;
