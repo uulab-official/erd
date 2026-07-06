@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { diffModels } from "./index.js";
-import type { Model, Entity } from "@modelforge/schema-engine";
+import type { Model, Entity, Relationship } from "@modelforge/schema-engine";
 
 function entity(physicalName: string, x = 0): Entity {
   return {
@@ -27,6 +27,20 @@ function model(entities: Entity[]): Model {
   };
 }
 
+function relationship(id: string, name?: string): Relationship {
+  return {
+    id,
+    name,
+    sourceEntityId: "customer",
+    targetEntityId: "order",
+    cardinality: "one-to-many",
+    kind: "non-identifying",
+    optionality: "mandatory",
+    sourceAttributeIds: [],
+    targetAttributeIds: [],
+  };
+}
+
 describe("diffModels", () => {
   it("detects added and removed entities", () => {
     const a = model([entity("customer")]);
@@ -36,6 +50,7 @@ describe("diffModels", () => {
       removed: [],
       changed: [],
       enums: { added: [], removed: [], changed: [] },
+      relationships: { added: [], removed: [], changed: [] },
     });
   });
 
@@ -61,5 +76,23 @@ describe("diffModels", () => {
     b.enums = [{ id: "e1", name: "Status", values: ["pending"] }];
     expect(diffModels(a, b).enums).toEqual({ added: ["e1"], removed: [], changed: [] });
     expect(diffModels(b, a).enums).toEqual({ added: [], removed: ["e1"], changed: [] });
+  });
+
+  it("detects a relationship-only change (e.g. cardinality) even when no entity is touched", () => {
+    const a = model([entity("customer"), entity("order")]);
+    const b = model([entity("customer"), entity("order")]);
+    a.relationships = [relationship("r1")];
+    b.relationships = [{ ...relationship("r1"), cardinality: "one-to-one" }];
+    const diff = diffModels(a, b);
+    expect(diff.changed).toEqual([]); // no entity touched
+    expect(diff.relationships).toEqual({ added: [], removed: [], changed: ["r1"] });
+  });
+
+  it("detects a relationship being added or removed", () => {
+    const a = model([entity("customer"), entity("order")]);
+    const b = model([entity("customer"), entity("order")]);
+    b.relationships = [relationship("r1")];
+    expect(diffModels(a, b).relationships).toEqual({ added: ["r1"], removed: [], changed: [] });
+    expect(diffModels(b, a).relationships).toEqual({ added: [], removed: ["r1"], changed: [] });
   });
 });

@@ -85,7 +85,10 @@ export function VersionsPanel() {
       compareDiff.changed.length +
       compareDiff.enums.added.length +
       compareDiff.enums.removed.length +
-      compareDiff.enums.changed.length
+      compareDiff.enums.changed.length +
+      compareDiff.relationships.added.length +
+      compareDiff.relationships.removed.length +
+      compareDiff.relationships.changed.length
     : 0;
 
   return (
@@ -180,6 +183,25 @@ export function VersionsPanel() {
                     {compareDiff.enums.changed.map((id) => (
                       <li key={`enum-changed-${id}`} className="text-amber-600">
                         ~ enum {model.enums.find((e) => e.id === id)?.name ?? id} changed
+                      </li>
+                    ))}
+                    {compareDiff.relationships.added.map((id) => (
+                      <li key={`rel-added-${id}`} className="text-green-700">
+                        + relationship {model.relationships.find((r) => r.id === id)?.name ?? id}{" "}
+                        created
+                      </li>
+                    ))}
+                    {compareDiff.relationships.removed.map((id) => (
+                      <li key={`rel-removed-${id}`} className="text-red-600">
+                        - relationship{" "}
+                        {compareSnapshot?.relationships.find((r) => r.id === id)?.name ?? id}{" "}
+                        deleted
+                      </li>
+                    ))}
+                    {compareDiff.relationships.changed.map((id) => (
+                      <li key={`rel-changed-${id}`} className="text-amber-600">
+                        ~ relationship {model.relationships.find((r) => r.id === id)?.name ?? id}{" "}
+                        changed
                       </li>
                     ))}
                   </ul>
