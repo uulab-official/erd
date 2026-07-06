@@ -42,14 +42,26 @@ function toCollection(entity: Entity, model: Model): AppwriteCollectionDef {
 
   const plainAttributes: AppwriteAttributeDef[] = entity.attributes
     .filter((attr) => !attr.isForeignKey)
-    .map((attr) => ({
-      key: attr.name,
-      type: mapColumnTypeToAppwrite(attr.type),
-      required: !attr.nullable,
-      array: false,
-      size: defaultSizeFor(attr.type, attr.length),
-      default: attr.default ?? null,
-    }));
+    .map((attr) => {
+      // Appwrite's native "enum" attribute requires a real `elements` array (its
+      // createEnumAttribute call fails without one) — an elements-less enum attribute
+      // would deploy broken, worse than the plain-string fallback the SQL dialects use
+      // for the same dangling-enumId case. So a dangling enumId falls back to "string"
+      // here rather than emitting type "enum" with no elements.
+      const enumType =
+        attr.type === "enum" ? model.enums.find((e) => e.id === attr.enumId) : undefined;
+      const type =
+        attr.type === "enum" && !enumType ? "string" : mapColumnTypeToAppwrite(attr.type);
+      return {
+        key: attr.name,
+        type,
+        required: !attr.nullable,
+        array: false,
+        size: defaultSizeFor(attr.type, attr.length),
+        default: attr.default ?? null,
+        ...(enumType ? { elements: enumType.values } : {}),
+      };
+    });
 
   const relationshipAttributes: AppwriteRelationshipAttributeDef[] = relationshipsFromHere.map(
     (rel) => ({

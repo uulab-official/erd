@@ -21,7 +21,13 @@ export function BottomPanel() {
   // not a from-scratch plan — so it stays a true preview of applying the pending diff.
   const plan = useMemo(() => planAppwriteDeployment(model, savedModel), [model, savedModel]);
   const diff = useMemo(() => diffModels(savedModel, model), [savedModel, model]);
-  const diffCount = diff.added.length + diff.removed.length + diff.changed.length;
+  const diffCount =
+    diff.added.length +
+    diff.removed.length +
+    diff.changed.length +
+    diff.enums.added.length +
+    diff.enums.removed.length +
+    diff.enums.changed.length;
 
   async function handleDeploy() {
     const destructiveCount = plan.steps.filter((s) => s.destructive).length;
@@ -96,6 +102,21 @@ export function BottomPanel() {
             {diff.changed.map((name) => (
               <li key={`changed-${name}`} className="text-amber-600">
                 ~ {name} changed
+              </li>
+            ))}
+            {diff.enums.added.map((id) => (
+              <li key={`enum-added-${id}`} className="text-green-700">
+                + enum {model.enums.find((e) => e.id === id)?.name ?? id} created
+              </li>
+            ))}
+            {diff.enums.removed.map((id) => (
+              <li key={`enum-removed-${id}`} className="text-red-600">
+                - enum {savedModel.enums.find((e) => e.id === id)?.name ?? id} deleted
+              </li>
+            ))}
+            {diff.enums.changed.map((id) => (
+              <li key={`enum-changed-${id}`} className="text-amber-600">
+                ~ enum {model.enums.find((e) => e.id === id)?.name ?? id} changed
               </li>
             ))}
           </ul>

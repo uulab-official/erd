@@ -59,4 +59,55 @@ describe("fromNativeSchema", () => {
     expect(widget.attributes).toHaveLength(2);
     expect(widget.attributes[0]?.isPrimaryKey).toBe(false);
   });
+
+  it("reconstructs a real EnumType from a native enum attribute's elements and links it via enumId", () => {
+    const model = fromNativeSchema({
+      collections: [
+        {
+          id: "order",
+          name: "Order",
+          attributes: [
+            {
+              key: "status",
+              type: "enum",
+              required: true,
+              array: false,
+              elements: ["pending", "shipped"],
+            },
+          ],
+          indexes: [],
+        },
+      ],
+    });
+    const status = model.entities[0]!.attributes.find((a) => a.name === "status");
+    expect(status?.type).toBe("enum");
+    expect(status?.enumId).toBe("order.status");
+    expect(model.enums).toContainEqual({
+      id: "order.status",
+      name: "status",
+      values: ["pending", "shipped"],
+    });
+  });
+
+  it("round-trips a linked EnumType through toNativeSchema -> fromNativeSchema", () => {
+    const model = shopModel();
+    model.enums = [{ id: "e1", name: "OrderStatus", values: ["pending", "shipped"] }];
+    model.entities[1]!.attributes.push({
+      id: "status",
+      name: "status",
+      logicalName: "Status",
+      type: "enum",
+      enumId: "e1",
+      nullable: false,
+      isPrimaryKey: false,
+      isForeignKey: false,
+      isUnique: false,
+    });
+    const roundTripped = fromNativeSchema(toNativeSchema(model));
+    const status = roundTripped.entities
+      .find((e) => e.id === "order")
+      ?.attributes.find((a) => a.name === "status");
+    const enumType = roundTripped.enums.find((e) => e.id === status?.enumId);
+    expect(enumType?.values).toEqual(["pending", "shipped"]);
+  });
 });

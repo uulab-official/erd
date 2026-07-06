@@ -362,6 +362,43 @@ function checkDomainDrift(model: Model): ValidationIssue[] {
   return issues;
 }
 
+// An attribute typed "enum" with no working enumId link degrades silently everywhere
+// downstream (code generators, SQL CHECK/native enum constraints, canvas/SVG diagram
+// display all fall back to a generic string/"enum" literal with no diagnostic trail) —
+// mirrors checkDomainDrift's "domain-not-found" for the same dangling-reference shape,
+// just never extended to cover Enum until now.
+function checkEnumIntegrity(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const enumsById = new Map(model.enums.map((e) => [e.id, e]));
+
+  for (const entity of model.entities) {
+    for (const attr of entity.attributes) {
+      if (attr.type !== "enum") continue;
+      if (!attr.enumId) {
+        issues.push({
+          severity: "warning",
+          code: "enum-not-linked",
+          message: `Attribute "${attr.name}" on entity "${entity.logicalName}" is typed "enum" but isn't linked to an Enum — assign one in Governance, or it will export as a generic string.`,
+          entityId: entity.id,
+          attributeId: attr.id,
+        });
+        continue;
+      }
+      if (!enumsById.has(attr.enumId)) {
+        issues.push({
+          severity: "error",
+          code: "enum-not-found",
+          message: `Attribute "${attr.name}" on entity "${entity.logicalName}" references missing enum "${attr.enumId}".`,
+          entityId: entity.id,
+          attributeId: attr.id,
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
 // Identifying relationships form a parent -> child dependency: the child's primary key
 // includes the parent's. A cycle in that graph means no entity's PK could ever be
 // resolved, so it's a hard error, not just a modeling smell.
@@ -430,5 +467,6 @@ export function validateModel(model: Model, reservedWords?: string[]): Validatio
     ...checkNamingConventions(model),
     ...checkAbbreviations(model),
     ...checkDomainDrift(model),
+    ...checkEnumIntegrity(model),
   ];
 }

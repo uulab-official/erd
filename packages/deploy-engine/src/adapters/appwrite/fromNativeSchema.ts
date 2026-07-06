@@ -1,4 +1,4 @@
-import type { Entity, Model, Relationship } from "@modelforge/schema-engine";
+import type { Entity, EnumType, Model, Relationship } from "@modelforge/schema-engine";
 import { mapAppwriteToColumnType } from "./typeMap.js";
 import {
   isRelationshipAttribute,
@@ -40,21 +40,35 @@ function syntheticIdAttribute(collectionId: string): Entity["attributes"][number
 }
 
 export function fromNativeSchema(native: AppwriteNativeSchema): Model {
+  const enums: EnumType[] = [];
+
   const entities: Entity[] = native.collections.map((collection, index) => {
     const plainAttributes = collection.attributes
       .filter((attr) => !isRelationshipAttribute(attr))
-      .map((attr) => ({
-        id: attr.key,
-        name: attr.key,
-        logicalName: attr.key,
-        type: mapAppwriteToColumnType(attr.type),
-        length: attr.size,
-        nullable: !attr.required,
-        isPrimaryKey: false,
-        isForeignKey: false,
-        isUnique: false,
-        default: attr.default ?? undefined,
-      }));
+      .map((attr) => {
+        // Appwrite's native enum attribute carries its allowed values directly on the
+        // attribute (`elements`), unlike a foreign-key-style reference to a shared enum
+        // type — so each one becomes its own EnumType here, the same one-EnumType-per-
+        // enum-attribute shape toNativeSchema expects when re-exporting.
+        const enumId =
+          attr.type === "enum" && attr.elements ? `${collection.id}.${attr.key}` : undefined;
+        if (enumId) {
+          enums.push({ id: enumId, name: attr.key, values: attr.elements! });
+        }
+        return {
+          id: attr.key,
+          name: attr.key,
+          logicalName: attr.key,
+          type: mapAppwriteToColumnType(attr.type),
+          length: attr.size,
+          enumId,
+          nullable: !attr.required,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: false,
+          default: attr.default ?? undefined,
+        };
+      });
     // Only synthesize $id if the export doesn't already have its own "id" attribute —
     // otherwise this would collide with it under a different attribute id.
     const needsSyntheticId = !plainAttributes.some((attr) => attr.name === "id");
@@ -104,6 +118,6 @@ export function fromNativeSchema(native: AppwriteNativeSchema): Model {
     relationships,
     views: [],
     sequences: [],
-    enums: [],
+    enums,
   };
 }
