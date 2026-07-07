@@ -92,6 +92,21 @@ function isOneToOneForeignKey(model: Model, entity: Entity, attr: Attribute): bo
   );
 }
 
+// Mirrors toNativeSchema.ts's soleAutoIncrementAttribute rule exactly (SQL adapter):
+// auto-increment only makes sense for a sole integer/bigint PK with no explicit default
+// — a composite PK or an explicit default means the database isn't assigning the value.
+// Without this, the generated schema.prisma required every insert to supply its own id,
+// even though the deployed SQL table (serial/bigserial/AUTO_INCREMENT) does it for you.
+function isSoleAutoIncrementPrimaryKey(entity: Entity, attr: Attribute): boolean {
+  const primaryKeyAttrs = entity.attributes.filter((a) => a.isPrimaryKey);
+  return (
+    primaryKeyAttrs.length === 1 &&
+    primaryKeyAttrs[0]?.id === attr.id &&
+    (attr.type === "integer" || attr.type === "bigint") &&
+    (attr.default === undefined || attr.default === null)
+  );
+}
+
 function renderField(model: Model, entity: Entity, attr: Attribute): string {
   const type = mapScalarType(model, attr) + (attr.nullable ? "?" : "");
   const modifiers: string[] = [];
@@ -103,6 +118,8 @@ function renderField(model: Model, entity: Entity, attr: Attribute): string {
     modifiers.push(`@default(${formatDefaultValue(attr.default)})`);
   } else if (attr.isPrimaryKey && attr.type === "uuid") {
     modifiers.push("@default(uuid())");
+  } else if (isSoleAutoIncrementPrimaryKey(entity, attr)) {
+    modifiers.push("@default(autoincrement())");
   }
   return `  ${attr.name} ${type}${modifiers.length ? ` ${modifiers.join(" ")}` : ""}`;
 }

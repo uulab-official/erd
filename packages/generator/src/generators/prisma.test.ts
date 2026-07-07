@@ -133,6 +133,38 @@ describe("renderPrismaSchema", () => {
     expect(schema).toContain('@relation("orders"');
     expect(schema).toContain('@relation("priorityOrders"');
   });
+
+  it("adds @default(autoincrement()) for a sole integer PK with no explicit default", () => {
+    const entity: Entity = { ...customerEntity(), attributes: [idAttr("customer_id", "integer")] };
+    const model: Model = { ...baseModel([]), entities: [entity] };
+    const schema = renderPrismaSchema(model);
+    expect(schema).toMatch(/customer_id\s+Int\s+@id\s+@default\(autoincrement\(\)\)/);
+  });
+
+  it("adds @default(autoincrement()) for a sole bigint PK with no explicit default", () => {
+    const entity: Entity = { ...customerEntity(), attributes: [idAttr("customer_id", "bigint")] };
+    const model: Model = { ...baseModel([]), entities: [entity] };
+    const schema = renderPrismaSchema(model);
+    expect(schema).toMatch(/customer_id\s+BigInt\s+@id\s+@default\(autoincrement\(\)\)/);
+  });
+
+  it("does not add autoincrement() when the integer PK has an explicit default", () => {
+    const pk = { ...idAttr("customer_id", "integer"), default: 0 };
+    const entity: Entity = { ...customerEntity(), attributes: [pk] };
+    const model: Model = { ...baseModel([]), entities: [entity] };
+    const schema = renderPrismaSchema(model);
+    expect(schema).not.toContain("autoincrement()");
+    expect(schema).toMatch(/customer_id\s+Int\s+@id\s+@default\(0\)/);
+  });
+
+  it("does not add autoincrement() on a composite integer PK", () => {
+    const pk1 = idAttr("customer_id", "integer");
+    const pk2 = { ...idAttr("customer_region", "integer"), name: "region" };
+    const entity: Entity = { ...customerEntity(), attributes: [pk1, pk2] };
+    const model: Model = { ...baseModel([]), entities: [entity] };
+    const schema = renderPrismaSchema(model);
+    expect(schema).not.toContain("autoincrement()");
+  });
 });
 
 describe("renderPrismaSchema with a real Enum", () => {
