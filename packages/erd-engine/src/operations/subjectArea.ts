@@ -40,6 +40,9 @@ export function createSubjectArea(
   if ((model.subjectAreas ?? []).some((s) => s.id === payload.subjectArea.id)) {
     throw new Error(`Subject Area "${payload.subjectArea.id}" already exists`);
   }
+  if ((model.subjectAreas ?? []).some((s) => s.name === payload.subjectArea.name)) {
+    throw new Error(`Subject Area named "${payload.subjectArea.name}" already exists`);
+  }
   const nextModel: Model = {
     ...model,
     subjectAreas: [...(model.subjectAreas ?? []), payload.subjectArea],
@@ -55,6 +58,14 @@ export function updateSubjectArea(
   actorId: string,
 ): SubjectAreaOpResult<"UpdateSubjectArea"> {
   const subjectArea = requireSubjectArea(model, payload.subjectAreaId);
+  if (
+    payload.changes.name !== undefined &&
+    (model.subjectAreas ?? []).some(
+      (s) => s.id !== subjectArea.id && s.name === payload.changes.name,
+    )
+  ) {
+    throw new Error(`Subject Area named "${payload.changes.name}" already exists`);
+  }
   const previousChanges: UpdateSubjectAreaPayload["changes"] = {};
   for (const key of Object.keys(payload.changes) as (keyof typeof payload.changes)[]) {
     (previousChanges as Record<string, unknown>)[key] = subjectArea[key];
