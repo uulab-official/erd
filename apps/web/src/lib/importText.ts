@@ -2,7 +2,16 @@ import { layeredLayoutEngine } from "@modelforge/layout-engine";
 import { dbmlImporter, mermaidImporter } from "@modelforge/parser";
 import type { Model } from "@modelforge/schema-engine";
 import type { Importer } from "@modelforge/sdk";
+import { pluginRegistry } from "./pluginRegistry.js";
 
+for (const importer of [dbmlImporter, mermaidImporter]) {
+  pluginRegistry.register({ type: "importer", impl: importer });
+}
+
+// Keyed by file extension rather than the registry's plugin-id Map, since dispatch here
+// is "which importer handles this filename" (and .mmd/.mermaid both map to the same
+// import.mermaid plugin) — a different lookup shape than the registry's id->plugin Map,
+// so this stays a small local index built from the same registered instances.
 const IMPORTERS_BY_EXTENSION: Record<string, Importer> = {
   dbml: dbmlImporter,
   mmd: mermaidImporter,

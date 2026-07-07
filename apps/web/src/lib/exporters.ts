@@ -11,6 +11,7 @@ import {
 } from "@modelforge/generator";
 import type { Model } from "@modelforge/schema-engine";
 import type { Exporter } from "@modelforge/sdk";
+import { pluginRegistry } from "./pluginRegistry.js";
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -83,7 +84,11 @@ export const pdfExporter: Exporter = {
   },
 };
 
-export const exporters: Exporter[] = [
+// Registered in Toolbar menu order (the relationship-aware SVG-derived formats first) —
+// the shared pluginRegistry (docs/plugins.md "내장 플러그인" registration point) is the
+// actual source of truth; this array is just a Map->array view for .map() call sites
+// that predate the registry and don't need to change.
+for (const exporter of [
   svgExporter,
   pngExporter,
   pdfExporter,
@@ -93,7 +98,10 @@ export const exporters: Exporter[] = [
   sqlExporter,
   mysqlExporter,
   sqliteExporter,
-];
+]) {
+  pluginRegistry.register({ type: "exporter", impl: exporter });
+}
+export const exporters: Exporter[] = [...pluginRegistry.exporters.values()];
 
 const EXTENSION_BY_FORMAT: Record<string, string> = {
   svg: "svg",

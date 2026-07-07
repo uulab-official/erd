@@ -70,8 +70,8 @@ Phase 구분은 [ARCHITECTURE.md#mvp-우선순위](ARCHITECTURE.md#mvp-우선순
 - [ ] GitHub 연동
 - [x] CI/CD Deploy (프로덕션 릴리스 파이프라인) — `.github/workflows/deploy.yml`: `main`에 push될 때마다 `apps/web`을 빌드해 **Appwrite Sites**로 자동 배포한다(머지 = 릴리스). `VITE_*` 환경변수는 GitHub Secrets로 주입하고, 배포는 `sites.read`/`sites.write` 스코프만 가진 CI 전용 API 키를 쓴다(관리자 키를 CI에 넣지 않음). 에이전트가 대신 할 수 없는 1회성 설정(Site 생성, CI 키 발급, GitHub Secrets 등록, 배포 도메인의 Web Platform 등록 — 마지막 걸 빼먹으면 배포된 사이트의 모든 Appwrite 호출이 CORS로 죽는다)은 [docs/deployment.md](docs/deployment.md)에 명령어 단위로 정리 — [PR #41](https://github.com/uulab-official/erd/pull/41). 여기서 "CI/CD Deploy"의 원래 의미였던 "모델을 DB에 배포하는 CD"는 여전히 미구현(Deploy Plan의 apply는 Appwrite adapter만 연결됨).
 - [ ] Migration Manager
-- [ ] 플러그인 시스템 (서드파티 `plugin.json` 매니페스트 동적 로드 — [docs/plugins.md](docs/plugins.md) "등록 시점" 참고)
-- [ ] Marketplace
+- [ ] 플러그인 시스템 — **내장 플러그인 등록은 완료**(아래 항목), 서드파티 `plugin.json` 매니페스트 동적 로드는 여전히 미구현 ([docs/plugins.md](docs/plugins.md) "등록 시점" 참고 — 임의 코드를 런타임에 로드하는 기능은 별도의 신중한 보안 설계가 필요해 이번 스코프에서 의도적으로 제외)
+- [x] `apps/web`이 실제로 `PluginRegistry`를 쓰도록 연결 — `packages/sdk`에 `createPluginRegistry()`가 이미 구현·테스트돼 있었지만(`registry.test.ts`), `apps/web`의 `lib/exporters.ts`/`lib/generators.ts`/`lib/layouts.ts`는 전부 그걸 무시하고 각자 평범한 배열 리터럴(`Exporter[]`/`CodeGenerator[]`/`LayoutEngine[]`)을 하드코딩하고 있었다 — CLAUDE.md 설계 원칙 4번("PluginRegistry에 등록해서 쓴다")이 문서에만 있고 실제로는 지켜지지 않던 상태(이번 세션에 반복해서 잡아낸 "타입/인프라는 있는데 소비자가 없다"는 것과 같은 클래스의 갭, 이번엔 데이터가 아니라 아키텍처). 새 `apps/web/src/lib/pluginRegistry.ts`가 공유 `PluginRegistry` 싱글턴을 만들고, 네 lib 파일(exporters/generators/layouts/importText)이 각자의 내장 플러그인을 그 레지스트리에 `register()`한 뒤 `[...registry.exporters.values()]` 형태로 배열 뷰를 다시 내보낸다 — Toolbar.tsx 등 기존 소비 코드는 배열 타입이 그대로라 변경 없음. Importer는 레지스트리에도 등록하지만, 파일 확장자→Importer 조회(`.mmd`/`.mermaid`가 같은 `import.mermaid`로 매핑)는 레지스트리의 id 키와 다른 조회 축이라 별도의 작은 로컬 맵으로 유지. 서드파티 플러그인이 Phase 4 Marketplace에서 실제로 붙을 때는 이미 앱이 쓰고 있는 이 레지스트리 인스턴스에 `register()`만 호출하면 되는 구조. 브라우저에서 실제로 확인: 리팩터 전후로 Export(SVG/PNG/PDF/Markdown/Mermaid/JSON/SQL×3)/Generate(Prisma/GraphQL/OpenAPI)/Layout(Auto/Grid) 드롭다운의 옵션이 완전히 동일하고, MySQL SQL export와 Prisma export를 실제로 실행해 콘솔 에러 없이 이전과 같은 출력이 나오는 것까지 확인.
 
 ## 진행 중 알아두면 좋은 것
 
