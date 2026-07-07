@@ -49,14 +49,29 @@ export function fromNativeSchema(native: SqlNativeSchema, dialect: SqlDialect): 
     })),
   );
 
+  // native.sequences/views carry no id of their own (unlike tables, which use their
+  // name as the Model entity id above) — reuse the name for the same reason: it's
+  // stable and unique within a schema. Enums are NOT reconstructed here: for a
+  // checkValues-based dialect (Postgres/SQLite) the allowed values live on the column,
+  // recoverable in principle, but for MySQL's native `enum(...)` column type they're
+  // baked into the rendered type string itself, requiring dialect-specific parsing —
+  // a bigger, separate fix, deferred like the enum-adapter gaps closed earlier.
+  const sequences = native.sequences.map((s) => ({
+    id: s.name,
+    name: s.name,
+    start: s.start,
+    increment: s.increment,
+  }));
+  const views = native.views.map((v) => ({ id: v.name, name: v.name, sql: v.sql }));
+
   return {
     id: "imported",
     name: "Imported from SQL",
     adapter: "postgresql",
     entities,
     relationships,
-    views: [],
-    sequences: [],
+    views,
+    sequences,
     enums: [],
   };
 }

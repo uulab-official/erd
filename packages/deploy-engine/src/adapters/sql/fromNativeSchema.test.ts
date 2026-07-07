@@ -27,4 +27,20 @@ describe("fromNativeSchema (SQL)", () => {
     expect(order?.attributes.find((a) => a.name === "customer_id")?.isForeignKey).toBe(true);
     expect(order?.attributes.find((a) => a.name === "id")?.isPrimaryKey).toBe(true);
   });
+
+  it("round-trips sequences and views back into the Model instead of dropping them", () => {
+    const before = shopModel();
+    before.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];
+    before.views = [{ id: "v1", name: "active_orders", sql: "SELECT * FROM purchase_order" }];
+
+    const schema = toNativeSchema(before, dialect);
+    const model = fromNativeSchema(schema, dialect);
+
+    expect(model.sequences).toEqual([
+      { id: "order_seq", name: "order_seq", start: 1, increment: 1 },
+    ]);
+    expect(model.views).toEqual([
+      { id: "active_orders", name: "active_orders", sql: "SELECT * FROM purchase_order" },
+    ]);
+  });
 });
