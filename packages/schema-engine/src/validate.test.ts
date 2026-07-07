@@ -809,6 +809,24 @@ describe("validateModel", () => {
     expect(codes).not.toContain("duplicate-subject-area-name");
   });
 
+  it("flags duplicate dictionary terms, case-insensitively", () => {
+    const model = emptyModel();
+    model.dictionary = [
+      { id: "e1", logicalTerm: "Identifier", standardName: "id" },
+      { id: "e2", logicalTerm: "identifier", standardName: "ID" },
+    ];
+    expect(validateModel(model).map((i) => i.code)).toContain("duplicate-dictionary-term");
+  });
+
+  it("does not flag unique dictionary terms", () => {
+    const model = emptyModel();
+    model.dictionary = [
+      { id: "e1", logicalTerm: "Identifier", standardName: "id" },
+      { id: "e2", logicalTerm: "Customer", standardName: "Cust" },
+    ];
+    expect(validateModel(model).map((i) => i.code)).not.toContain("duplicate-dictionary-term");
+  });
+
   it("flags duplicate sequence names", () => {
     const model = emptyModel();
     model.sequences = [

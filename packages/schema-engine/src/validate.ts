@@ -483,6 +483,32 @@ function checkDuplicateGovernanceNames(model: Model): ValidationIssue[] {
   return issues;
 }
 
+// checkDictionaryTerms (above) looks up a word's standard spelling via
+// `new Map(entries.map((e) => [e.logicalTerm.toLowerCase(), e.standardName]))` — two
+// DictionaryEntry objects sharing a logicalTerm (case-insensitively, matching that Map's
+// key) silently collapse to whichever one iterates last, with the other's standardName
+// dropped and no diagnostic. addDictionaryEntry/updateDictionaryEntry now reject this at
+// the Operation layer, but a Model that arrived a different way (import/restore) could
+// still carry the collision.
+function checkDuplicateDictionaryTerms(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const seenTerms = new Set<string>();
+
+  for (const entry of model.dictionary ?? []) {
+    const key = entry.logicalTerm.toLowerCase();
+    if (seenTerms.has(key)) {
+      issues.push({
+        severity: "error",
+        code: "duplicate-dictionary-term",
+        message: `Duplicate dictionary term "${entry.logicalTerm}".`,
+      });
+    }
+    seenTerms.add(key);
+  }
+
+  return issues;
+}
+
 // Sequence/View names have no Operation-level duplicate check until now (mirrors the
 // "created via Operation guard, but nothing re-checks a Model that arrived a different
 // way" gap that domain/enum integrity checks above close) — two Sequences or Views
@@ -598,6 +624,7 @@ export function validateModel(model: Model, reservedWords?: string[]): Validatio
     ...checkDomainDrift(model),
     ...checkEnumIntegrity(model),
     ...checkDuplicateGovernanceNames(model),
+    ...checkDuplicateDictionaryTerms(model),
     ...checkDatabaseObjects(model),
   ];
 }

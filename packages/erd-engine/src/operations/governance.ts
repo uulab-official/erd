@@ -114,6 +114,13 @@ export function addDictionaryEntry(
   if ((model.dictionary ?? []).some((e) => e.id === payload.entry.id)) {
     throw new Error(`Dictionary entry "${payload.entry.id}" already exists`);
   }
+  if (
+    (model.dictionary ?? []).some(
+      (e) => e.logicalTerm.toLowerCase() === payload.entry.logicalTerm.toLowerCase(),
+    )
+  ) {
+    throw new Error(`Dictionary entry for "${payload.entry.logicalTerm}" already exists`);
+  }
   const nextModel: Model = {
     ...model,
     dictionary: [...(model.dictionary ?? []), payload.entry],
@@ -129,6 +136,16 @@ export function updateDictionaryEntry(
   actorId: string,
 ): GovernanceOpResult<"UpdateDictionaryEntry"> {
   const entry = requireDictionaryEntry(model, payload.entryId);
+  if (
+    payload.changes.logicalTerm !== undefined &&
+    (model.dictionary ?? []).some(
+      (e) =>
+        e.id !== entry.id &&
+        e.logicalTerm.toLowerCase() === payload.changes.logicalTerm?.toLowerCase(),
+    )
+  ) {
+    throw new Error(`Dictionary entry for "${payload.changes.logicalTerm}" already exists`);
+  }
   const previousChanges: UpdateDictionaryEntryPayload["changes"] = {};
   for (const key of Object.keys(payload.changes) as (keyof typeof payload.changes)[]) {
     (previousChanges as Record<string, unknown>)[key] = entry[key];

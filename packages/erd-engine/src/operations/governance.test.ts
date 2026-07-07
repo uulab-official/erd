@@ -125,6 +125,33 @@ describe("addDictionaryEntry / updateDictionaryEntry / deleteDictionaryEntry", (
     expect(model.dictionary).toEqual([]);
     expect(applyInverse(model, operation)).toEqual(before);
   });
+
+  it("rejects adding an entry for a logicalTerm already used (case-insensitively)", () => {
+    const before = addDictionaryEntry(emptyModel(), { entry: ID_TERM }, "user-1").model;
+    expect(() =>
+      addDictionaryEntry(
+        before,
+        { entry: { id: "e2", logicalTerm: "identifier", standardName: "id" } },
+        "user-1",
+      ),
+    ).toThrow();
+  });
+
+  it("rejects renaming an entry's logicalTerm to one already used by another entry", () => {
+    let model = addDictionaryEntry(emptyModel(), { entry: ID_TERM }, "user-1").model;
+    model = addDictionaryEntry(
+      model,
+      { entry: { id: "e2", logicalTerm: "Customer", standardName: "Cust" } },
+      "user-1",
+    ).model;
+    expect(() =>
+      updateDictionaryEntry(
+        model,
+        { entryId: "e2", changes: { logicalTerm: "Identifier" } },
+        "user-1",
+      ),
+    ).toThrow();
+  });
 });
 
 describe("updateNamingRuleSet", () => {
