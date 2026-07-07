@@ -506,6 +506,61 @@ describe("validateModel", () => {
     expect(issue?.message).toContain('abbreviate "identifier" as "id"');
   });
 
+  it("suggests the Dictionary's standard term when a name uses a different spelling", () => {
+    const model = emptyModel();
+    model.dictionary = [{ id: "d1", logicalTerm: "customer", standardName: "Cust" }];
+    model.entities.push({
+      id: "e1",
+      logicalName: "Order",
+      physicalName: "order",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "customer_id",
+          logicalName: "Customer ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    const issue = validateModel(model).find((i) => i.code === "dictionary-term-suggested");
+    expect(issue?.message).toContain('standard term "Cust" instead of "customer"');
+  });
+
+  it("does not flag a name that already uses the Dictionary's exact standard spelling", () => {
+    const model = emptyModel();
+    model.dictionary = [{ id: "d1", logicalTerm: "customer", standardName: "Cust" }];
+    model.entities.push({
+      id: "e1",
+      logicalName: "Order",
+      physicalName: "order",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "Cust_id",
+          logicalName: "Customer ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).not.toContain("dictionary-term-suggested");
+  });
+
   it("flags an attribute referencing a missing domain", () => {
     const model = emptyModel();
     model.entities.push({
