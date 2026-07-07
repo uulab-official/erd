@@ -26,6 +26,13 @@ describe("createSequence / deleteSequence", () => {
     expect(() => createSequence(before, { sequence: ORDER_SEQ }, "user-1")).toThrow();
   });
 
+  it("rejects creating a sequence with a duplicate name (different id)", () => {
+    const before = createSequence(emptyModel(), { sequence: ORDER_SEQ }, "user-1").model;
+    expect(() =>
+      createSequence(before, { sequence: { ...ORDER_SEQ, id: "s2" } }, "user-1"),
+    ).toThrow();
+  });
+
   it("deletes a sequence and its inverse restores it", () => {
     const before = createSequence(emptyModel(), { sequence: ORDER_SEQ }, "user-1").model;
     const { model, operation } = deleteSequence(before, { sequenceId: "s1" }, "user-1");
@@ -49,6 +56,18 @@ describe("updateSequence", () => {
     expect(model.sequences[0]).toMatchObject({ increment: 5, name: "order_seq" });
     expect(applyInverse(model, operation)).toEqual(before);
   });
+
+  it("rejects renaming a sequence to a name already used by another sequence", () => {
+    let model = createSequence(emptyModel(), { sequence: ORDER_SEQ }, "user-1").model;
+    model = createSequence(
+      model,
+      { sequence: { id: "s2", name: "invoice_seq", start: 1, increment: 1 } },
+      "user-1",
+    ).model;
+    expect(() =>
+      updateSequence(model, { sequenceId: "s2", changes: { name: "order_seq" } }, "user-1"),
+    ).toThrow();
+  });
 });
 
 describe("createView / deleteView", () => {
@@ -62,6 +81,13 @@ describe("createView / deleteView", () => {
   it("rejects creating a view with a duplicate id", () => {
     const before = createView(emptyModel(), { view: ACTIVE_ORDERS_VIEW }, "user-1").model;
     expect(() => createView(before, { view: ACTIVE_ORDERS_VIEW }, "user-1")).toThrow();
+  });
+
+  it("rejects creating a view with a duplicate name (different id)", () => {
+    const before = createView(emptyModel(), { view: ACTIVE_ORDERS_VIEW }, "user-1").model;
+    expect(() =>
+      createView(before, { view: { ...ACTIVE_ORDERS_VIEW, id: "v2" } }, "user-1"),
+    ).toThrow();
   });
 
   it("deletes a view and its inverse restores it", () => {
@@ -85,5 +111,17 @@ describe("updateView", () => {
       name: "active_orders",
     });
     expect(applyInverse(model, operation)).toEqual(before);
+  });
+
+  it("rejects renaming a view to a name already used by another view", () => {
+    let model = createView(emptyModel(), { view: ACTIVE_ORDERS_VIEW }, "user-1").model;
+    model = createView(
+      model,
+      { view: { id: "v2", name: "pending_orders", sql: "SELECT 1" } },
+      "user-1",
+    ).model;
+    expect(() =>
+      updateView(model, { viewId: "v2", changes: { name: "active_orders" } }, "user-1"),
+    ).toThrow();
   });
 });

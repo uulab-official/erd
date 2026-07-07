@@ -715,4 +715,43 @@ describe("validateModel", () => {
     expect(codes).not.toContain("enum-not-linked");
     expect(codes).not.toContain("enum-not-found");
   });
+
+  it("flags duplicate sequence names", () => {
+    const model = emptyModel();
+    model.sequences = [
+      { id: "s1", name: "order_seq", start: 1, increment: 1 },
+      { id: "s2", name: "order_seq", start: 1, increment: 1 },
+    ];
+    const codes = validateModel(model).map((i) => i.code);
+    expect(codes).toContain("duplicate-sequence-name");
+  });
+
+  it("flags duplicate view names", () => {
+    const model = emptyModel();
+    model.views = [
+      { id: "v1", name: "active_orders", sql: "SELECT 1" },
+      { id: "v2", name: "active_orders", sql: "SELECT 2" },
+    ];
+    const codes = validateModel(model).map((i) => i.code);
+    expect(codes).toContain("duplicate-view-name");
+  });
+
+  it("flags a view with no sql", () => {
+    const model = emptyModel();
+    model.views = [{ id: "v1", name: "active_orders" }];
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ code: "view-missing-sql", severity: "warning" }),
+    );
+  });
+
+  it("does not flag a view that has sql, or unique sequence/view names", () => {
+    const model = emptyModel();
+    model.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];
+    model.views = [{ id: "v1", name: "active_orders", sql: "SELECT 1" }];
+    const codes = validateModel(model).map((i) => i.code);
+    expect(codes).not.toContain("duplicate-sequence-name");
+    expect(codes).not.toContain("duplicate-view-name");
+    expect(codes).not.toContain("view-missing-sql");
+  });
 });

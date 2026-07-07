@@ -42,6 +42,9 @@ export function createSequence(
   if (model.sequences.some((s) => s.id === payload.sequence.id)) {
     throw new Error(`Sequence "${payload.sequence.id}" already exists`);
   }
+  if (model.sequences.some((s) => s.name === payload.sequence.name)) {
+    throw new Error(`Sequence named "${payload.sequence.name}" already exists`);
+  }
   const nextModel: Model = { ...model, sequences: [...model.sequences, payload.sequence] };
   const inverse = inverseOf("DeleteSequence", { sequenceId: payload.sequence.id });
   const operation = buildOperation("CreateSequence", model.id, payload, inverse, actorId);
@@ -54,6 +57,12 @@ export function updateSequence(
   actorId: string,
 ): DatabaseOpResult<"UpdateSequence"> {
   const sequence = requireSequence(model, payload.sequenceId);
+  if (
+    payload.changes.name !== undefined &&
+    model.sequences.some((s) => s.id !== sequence.id && s.name === payload.changes.name)
+  ) {
+    throw new Error(`Sequence named "${payload.changes.name}" already exists`);
+  }
   const previousChanges: UpdateSequencePayload["changes"] = {};
   for (const key of Object.keys(payload.changes) as (keyof typeof payload.changes)[]) {
     (previousChanges as Record<string, unknown>)[key] = sequence[key];
@@ -95,6 +104,9 @@ export function createView(
   if (model.views.some((v) => v.id === payload.view.id)) {
     throw new Error(`View "${payload.view.id}" already exists`);
   }
+  if (model.views.some((v) => v.name === payload.view.name)) {
+    throw new Error(`View named "${payload.view.name}" already exists`);
+  }
   const nextModel: Model = { ...model, views: [...model.views, payload.view] };
   const inverse = inverseOf("DeleteView", { viewId: payload.view.id });
   const operation = buildOperation("CreateView", model.id, payload, inverse, actorId);
@@ -107,6 +119,12 @@ export function updateView(
   actorId: string,
 ): DatabaseOpResult<"UpdateView"> {
   const view = requireView(model, payload.viewId);
+  if (
+    payload.changes.name !== undefined &&
+    model.views.some((v) => v.id !== view.id && v.name === payload.changes.name)
+  ) {
+    throw new Error(`View named "${payload.changes.name}" already exists`);
+  }
   const previousChanges: UpdateViewPayload["changes"] = {};
   for (const key of Object.keys(payload.changes) as (keyof typeof payload.changes)[]) {
     (previousChanges as Record<string, unknown>)[key] = view[key];

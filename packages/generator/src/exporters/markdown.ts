@@ -53,6 +53,21 @@ export function renderMarkdown(model: Model): string {
     lines.push("");
   }
 
+  if (model.sequences.length > 0) {
+    lines.push("## Sequences", "", "| Sequence | Start | Increment |", "|---|---|---|");
+    for (const sequence of model.sequences) {
+      lines.push(`| ${sequence.name} | ${sequence.start} | ${sequence.increment} |`);
+    }
+    lines.push("");
+  }
+
+  if (model.views.length > 0) {
+    lines.push("## Views", "");
+    for (const view of model.views) {
+      lines.push(`### ${view.name}`, "", "```sql", view.sql ?? "", "```", "");
+    }
+  }
+
   return lines.join("\n");
 }
 
