@@ -13,7 +13,11 @@ export interface MigrationStep {
     | "create-index"
     | "drop-index"
     | "create-relationship"
-    | "drop-relationship";
+    | "drop-relationship"
+    | "create-sequence"
+    | "drop-sequence"
+    | "create-view"
+    | "drop-view";
   target: string;
   sql?: string;
   appwriteCall?: unknown;

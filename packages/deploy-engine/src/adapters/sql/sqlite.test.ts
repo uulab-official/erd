@@ -14,6 +14,12 @@ describe("createSQLiteDialect", () => {
     expect(dialect.supportsAlterForeignKey).toBe(false);
   });
 
+  it("has no native sequence object, unlike PostgreSQL", () => {
+    expect(dialect.supportsSequences).toBe(false);
+    expect(dialect.createSequenceDDL({ name: "order_seq", start: 1, increment: 1 })).toBe("");
+    expect(dialect.dropSequenceDDL("order_seq")).toBe("");
+  });
+
   it("inlines foreign keys into CREATE TABLE instead of a separate ALTER TABLE", () => {
     const schema = toNativeSchema(shopModel(), dialect);
     const order = schema.tables.find((t) => t.name === "purchase_order")!;

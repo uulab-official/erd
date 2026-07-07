@@ -1,6 +1,7 @@
 import type { Model } from "@modelforge/schema-engine";
 import type { Operation } from "@modelforge/sdk";
 import * as attributeOps from "./attribute.js";
+import * as databaseOps from "./database.js";
 import * as entityOps from "./entity.js";
 import * as enumOps from "./enumType.js";
 import * as governanceOps from "./governance.js";
@@ -266,6 +267,42 @@ export function applyOperation(model: Model, op: DispatchableOperation): Model {
       return enumOps.unassignEnumFromAttribute(
         model,
         op.payload as OperationPayloadMap["UnassignEnumFromAttribute"],
+        REPLAY_ACTOR,
+      ).model;
+    case "CreateSequence":
+      return databaseOps.createSequence(
+        model,
+        op.payload as OperationPayloadMap["CreateSequence"],
+        REPLAY_ACTOR,
+      ).model;
+    case "UpdateSequence":
+      return databaseOps.updateSequence(
+        model,
+        op.payload as OperationPayloadMap["UpdateSequence"],
+        REPLAY_ACTOR,
+      ).model;
+    case "DeleteSequence":
+      return databaseOps.deleteSequence(
+        model,
+        op.payload as OperationPayloadMap["DeleteSequence"],
+        REPLAY_ACTOR,
+      ).model;
+    case "CreateView":
+      return databaseOps.createView(
+        model,
+        op.payload as OperationPayloadMap["CreateView"],
+        REPLAY_ACTOR,
+      ).model;
+    case "UpdateView":
+      return databaseOps.updateView(
+        model,
+        op.payload as OperationPayloadMap["UpdateView"],
+        REPLAY_ACTOR,
+      ).model;
+    case "DeleteView":
+      return databaseOps.deleteView(
+        model,
+        op.payload as OperationPayloadMap["DeleteView"],
         REPLAY_ACTOR,
       ).model;
     default: {

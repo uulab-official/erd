@@ -44,6 +44,19 @@ export interface SqlTableDef {
   foreignKeys: SqlForeignKeyDef[];
 }
 
+export interface SqlSequenceDef {
+  name: string;
+  start: number;
+  increment: number;
+}
+
+export interface SqlViewDef {
+  name: string;
+  sql: string;
+}
+
 export interface SqlNativeSchema {
   tables: SqlTableDef[];
+  sequences: SqlSequenceDef[];
+  views: SqlViewDef[];
 }

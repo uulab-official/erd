@@ -1,6 +1,12 @@
 import type { Entity, Model } from "@modelforge/schema-engine";
 import type { SqlDialect } from "./dialect.js";
-import type { SqlForeignKeyDef, SqlNativeSchema, SqlTableDef } from "./types.js";
+import type {
+  SqlForeignKeyDef,
+  SqlNativeSchema,
+  SqlSequenceDef,
+  SqlTableDef,
+  SqlViewDef,
+} from "./types.js";
 
 function toTable(entity: Entity, model: Model, dialect: SqlDialect): SqlTableDef {
   const primaryKey = entity.attributes.filter((a) => a.isPrimaryKey).map((a) => a.name);
@@ -71,5 +77,21 @@ function toTable(entity: Entity, model: Model, dialect: SqlDialect): SqlTableDef
 }
 
 export function toNativeSchema(model: Model, dialect: SqlDialect): SqlNativeSchema {
-  return { tables: model.entities.map((entity) => toTable(entity, model, dialect)) };
+  const sequences: SqlSequenceDef[] = model.sequences.map((s) => ({
+    name: s.name,
+    start: s.start,
+    increment: s.increment,
+  }));
+  // A View with no `sql` (only `definition`, the non-SQL/Appwrite-style declarative
+  // shape) has nothing renderable for a SQL adapter — skip rather than emit an empty
+  // CREATE VIEW.
+  const views: SqlViewDef[] = model.views
+    .filter((v): v is typeof v & { sql: string } => Boolean(v.sql))
+    .map((v) => ({ name: v.name, sql: v.sql }));
+
+  return {
+    tables: model.entities.map((entity) => toTable(entity, model, dialect)),
+    sequences,
+    views,
+  };
 }

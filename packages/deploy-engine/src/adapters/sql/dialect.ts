@@ -1,5 +1,12 @@
 import type { ColumnType } from "@modelforge/schema-engine";
-import type { SqlColumnDef, SqlForeignKeyDef, SqlIndexDef, SqlTableDef } from "./types.js";
+import type {
+  SqlColumnDef,
+  SqlForeignKeyDef,
+  SqlIndexDef,
+  SqlSequenceDef,
+  SqlTableDef,
+  SqlViewDef,
+} from "./types.js";
 
 export interface ReverseMappedType {
   type: ColumnType;
@@ -32,6 +39,19 @@ export interface SqlDialect {
   // Returns "" for a dialect where foreign keys are inline-only (see
   // supportsAlterForeignKey) — the constraint is already part of createTableDDL.
   foreignKeyDDL(fk: SqlForeignKeyDef, ownerTableName: string): string;
+  createViewDDL(view: SqlViewDef): string;
+  dropViewDDL(viewName: string): string;
+  // Standalone named sequence objects are a first-class PostgreSQL feature (CREATE
+  // SEQUENCE) but have no standard-MySQL/SQLite equivalent (unlike the AUTO_INCREMENT/
+  // AUTOINCREMENT column-level sugar already handled by autoIncrementType/Suffix above,
+  // which is a different concept — a sequence can be named, shared, and have a custom
+  // start/increment independent of any one column). createSequenceDDL/dropSequenceDDL
+  // return "" when supportsSequences is false — callers check that flag first rather than
+  // guessing at nonexistent syntax, the same "don't guess, warn" policy used for SQLite's
+  // FK-ALTER limitation.
+  readonly supportsSequences: boolean;
+  createSequenceDDL(sequence: SqlSequenceDef): string;
+  dropSequenceDDL(sequenceName: string): string;
 }
 
 function formatDefault(value: SqlColumnDef["default"]): string {
@@ -81,6 +101,8 @@ export interface SqlDialectOptions {
   // MySQL: native `enum(...)` column type. Dialects without one (PostgreSQL/SQLite) omit
   // this and toNativeSchema falls back to a CHECK constraint instead.
   enumColumnType?(values: string[]): string;
+  // Only PostgreSQL sets this — see SqlDialect.supportsSequences.
+  supportsSequences?: boolean;
 }
 
 // Generic implementation of columnDDL/createTableDDL/createIndexDDL/foreignKeyDDL shared
@@ -95,6 +117,7 @@ export function createSqlDialect(options: SqlDialectOptions): SqlDialect {
     autoIncrementSuffix,
     inlinePrimaryKeyOnAutoIncrement,
     enumColumnType,
+    supportsSequences = false,
   } = options;
 
   const columnDDL: SqlDialect["columnDDL"] = (column) => {
@@ -140,9 +163,24 @@ export function createSqlDialect(options: SqlDialectOptions): SqlDialect {
       ? `ALTER TABLE ${quoteIdentifier(ownerTableName)} ADD CONSTRAINT ${quoteIdentifier(fk.name)} ${inlineForeignKeyDDL(fk)};`
       : "";
 
+  // CREATE VIEW/DROP VIEW syntax is identical across PostgreSQL/MySQL/SQLite, so this is
+  // shared rather than a per-dialect hook (unlike createSequenceDDL below).
+  const createViewDDL: SqlDialect["createViewDDL"] = (view) =>
+    `CREATE VIEW ${quoteIdentifier(view.name)} AS ${view.sql};`;
+  const dropViewDDL: SqlDialect["dropViewDDL"] = (viewName) =>
+    `DROP VIEW ${quoteIdentifier(viewName)};`;
+
+  const createSequenceDDL: SqlDialect["createSequenceDDL"] = (sequence) =>
+    supportsSequences
+      ? `CREATE SEQUENCE ${quoteIdentifier(sequence.name)} START WITH ${sequence.start} INCREMENT BY ${sequence.increment};`
+      : "";
+  const dropSequenceDDL: SqlDialect["dropSequenceDDL"] = (sequenceName) =>
+    supportsSequences ? `DROP SEQUENCE ${quoteIdentifier(sequenceName)};` : "";
+
   return {
     name: options.name,
     supportsAlterForeignKey,
+    supportsSequences,
     quoteIdentifier,
     mapType: options.mapType,
     mapTypeBack: options.mapTypeBack,
@@ -151,6 +189,10 @@ export function createSqlDialect(options: SqlDialectOptions): SqlDialect {
     createTableDDL,
     createIndexDDL,
     foreignKeyDDL,
+    createViewDDL,
+    dropViewDDL,
+    createSequenceDDL,
+    dropSequenceDDL,
   };
 }
 
@@ -221,5 +263,6 @@ export function createPostgresDialect(): SqlDialect {
     // PostgreSQL has no AUTO_INCREMENT keyword — serial/bigserial are sugar for
     // integer/bigint plus an implicitly-created sequence and DEFAULT nextval(...).
     autoIncrementType: (mappedType) => (mappedType === "bigint" ? "bigserial" : "serial"),
+    supportsSequences: true,
   });
 }
