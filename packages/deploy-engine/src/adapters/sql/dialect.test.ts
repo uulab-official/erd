@@ -104,4 +104,19 @@ describe("createPostgresDialect", () => {
       }),
     ).toBe(`"status" text NOT NULL CHECK ("status" IN ('pending', 'in progress', 'it''s done'))`);
   });
+
+  it("renders CREATE VIEW/DROP VIEW", () => {
+    expect(dialect.createViewDDL({ name: "active_orders", sql: "SELECT * FROM orders" })).toBe(
+      'CREATE VIEW "active_orders" AS SELECT * FROM orders;',
+    );
+    expect(dialect.dropViewDDL("active_orders")).toBe('DROP VIEW "active_orders";');
+  });
+
+  it("supports native sequences: CREATE SEQUENCE/DROP SEQUENCE", () => {
+    expect(dialect.supportsSequences).toBe(true);
+    expect(dialect.createSequenceDDL({ name: "order_seq", start: 1, increment: 1 })).toBe(
+      'CREATE SEQUENCE "order_seq" START WITH 1 INCREMENT BY 1;',
+    );
+    expect(dialect.dropSequenceDDL("order_seq")).toBe('DROP SEQUENCE "order_seq";');
+  });
 });

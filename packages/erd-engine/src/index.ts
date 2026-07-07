@@ -24,6 +24,7 @@ export * from "./operations/memo.js";
 export * from "./operations/relationship.js";
 export * from "./operations/subjectArea.js";
 export * from "./operations/governance.js";
+export * from "./operations/database.js";
 export * from "./operations/apply.js";
 export * from "./operations/transaction.js";
 export * from "./operations/history.js";

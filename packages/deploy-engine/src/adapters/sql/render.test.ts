@@ -17,4 +17,20 @@ describe("renderSql", () => {
     expect(createTableIdx).toBeLessThan(createIndexIdx);
     expect(createIndexIdx).toBeLessThan(alterTableIdx);
   });
+
+  it("renders sequences before tables and views after everything else", () => {
+    const dialect = createPostgresDialect();
+    const model = shopModel();
+    model.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];
+    model.views = [{ id: "v1", name: "active_orders", sql: "SELECT * FROM purchase_order" }];
+    const sql = renderSql(toNativeSchema(model, dialect), dialect);
+
+    const createSequenceIdx = sql.indexOf("CREATE SEQUENCE");
+    const createTableIdx = sql.indexOf("CREATE TABLE");
+    const createViewIdx = sql.indexOf("CREATE VIEW");
+
+    expect(createSequenceIdx).toBeGreaterThanOrEqual(0);
+    expect(createSequenceIdx).toBeLessThan(createTableIdx);
+    expect(createTableIdx).toBeLessThan(createViewIdx);
+  });
 });

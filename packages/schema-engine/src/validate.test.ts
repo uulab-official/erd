@@ -506,6 +506,61 @@ describe("validateModel", () => {
     expect(issue?.message).toContain('abbreviate "identifier" as "id"');
   });
 
+  it("suggests the Dictionary's standard term when a name uses a different spelling", () => {
+    const model = emptyModel();
+    model.dictionary = [{ id: "d1", logicalTerm: "customer", standardName: "Cust" }];
+    model.entities.push({
+      id: "e1",
+      logicalName: "Order",
+      physicalName: "order",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "customer_id",
+          logicalName: "Customer ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    const issue = validateModel(model).find((i) => i.code === "dictionary-term-suggested");
+    expect(issue?.message).toContain('standard term "Cust" instead of "customer"');
+  });
+
+  it("does not flag a name that already uses the Dictionary's exact standard spelling", () => {
+    const model = emptyModel();
+    model.dictionary = [{ id: "d1", logicalTerm: "customer", standardName: "Cust" }];
+    model.entities.push({
+      id: "e1",
+      logicalName: "Order",
+      physicalName: "order",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "Cust_id",
+          logicalName: "Customer ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).not.toContain("dictionary-term-suggested");
+  });
+
   it("flags an attribute referencing a missing domain", () => {
     const model = emptyModel();
     model.entities.push({
@@ -752,5 +807,44 @@ describe("validateModel", () => {
     expect(codes).not.toContain("duplicate-domain-name");
     expect(codes).not.toContain("duplicate-enum-name");
     expect(codes).not.toContain("duplicate-subject-area-name");
+  });
+
+  it("flags duplicate sequence names", () => {
+    const model = emptyModel();
+    model.sequences = [
+      { id: "s1", name: "order_seq", start: 1, increment: 1 },
+      { id: "s2", name: "order_seq", start: 1, increment: 1 },
+    ];
+    const codes = validateModel(model).map((i) => i.code);
+    expect(codes).toContain("duplicate-sequence-name");
+  });
+
+  it("flags duplicate view names", () => {
+    const model = emptyModel();
+    model.views = [
+      { id: "v1", name: "active_orders", sql: "SELECT 1" },
+      { id: "v2", name: "active_orders", sql: "SELECT 2" },
+    ];
+    const codes = validateModel(model).map((i) => i.code);
+    expect(codes).toContain("duplicate-view-name");
+  });
+
+  it("flags a view with no sql", () => {
+    const model = emptyModel();
+    model.views = [{ id: "v1", name: "active_orders" }];
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ code: "view-missing-sql", severity: "warning" }),
+    );
+  });
+
+  it("does not flag a view that has sql, or unique sequence/view names", () => {
+    const model = emptyModel();
+    model.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];
+    model.views = [{ id: "v1", name: "active_orders", sql: "SELECT 1" }];
+    const codes = validateModel(model).map((i) => i.code);
+    expect(codes).not.toContain("duplicate-sequence-name");
+    expect(codes).not.toContain("duplicate-view-name");
+    expect(codes).not.toContain("view-missing-sql");
   });
 });

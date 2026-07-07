@@ -11,7 +11,9 @@ import type {
   Model,
   NamingRuleSet,
   Relationship,
+  Sequence,
   SubjectArea,
+  View,
 } from "@modelforge/schema-engine";
 import { validateModel, type ValidationIssue } from "@modelforge/schema-engine";
 import {
@@ -29,7 +31,9 @@ import {
   createEnum as createEnumOp,
   createIndex as createIndexOp,
   createMemo as createMemoOp,
+  createSequence as createSequenceOp,
   createSubjectArea as createSubjectAreaOp,
+  createView as createViewOp,
   deleteDictionaryEntry as deleteDictionaryEntryOp,
   deleteDomainCascade,
   deleteEntityCascade,
@@ -37,7 +41,9 @@ import {
   deleteIndex as deleteIndexOp,
   deleteMemo as deleteMemoOp,
   deleteRelationship as deleteRelationshipOp,
+  deleteSequence as deleteSequenceOp,
   deleteSubjectAreaCascade,
+  deleteView as deleteViewOp,
   describeHistoryEntry,
   moveEntitiesTransaction,
   moveEntity as moveEntityOp,
@@ -57,10 +63,14 @@ import {
   updateEnumValues as updateEnumValuesOp,
   updateMemoText as updateMemoTextOp,
   updateNamingRuleSet as updateNamingRuleSetOp,
+  updateSequence as updateSequenceOp,
   updateSubjectArea as updateSubjectAreaOp,
+  updateView as updateViewOp,
   type UpdateDictionaryEntryPayload,
   type UpdateDomainPayload,
+  type UpdateSequencePayload,
   type UpdateSubjectAreaPayload,
+  type UpdateViewPayload,
 } from "@modelforge/erd-engine";
 import { getModelStore } from "../lib/appwrite.js";
 
@@ -185,6 +195,13 @@ interface EditorState {
   deleteEnum(enumId: string): void;
   assignEnumToAttribute(entityId: string, attributeId: string, enumId: string): void;
   unassignEnumFromAttribute(entityId: string, attributeId: string): void;
+  // Sequences/Views (Model.sequences/Model.views) — see components/GovernancePanel.tsx.
+  createSequence(sequence: Sequence): void;
+  updateSequence(sequenceId: string, changes: UpdateSequencePayload["changes"]): void;
+  deleteSequence(sequenceId: string): void;
+  createView(view: View): void;
+  updateView(viewId: string, changes: UpdateViewPayload["changes"]): void;
+  deleteView(viewId: string): void;
   // Memos (freeform canvas sticky notes) — see components/Workspace.tsx.
   createMemo(memo: Memo): void;
   updateMemoText(memoId: string, text: string): void;
@@ -599,6 +616,42 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       { entityId, attributeId },
       ACTOR_ID,
     );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  createSequence(sequence) {
+    const { model, operation } = createSequenceOp(get().model, { sequence }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  updateSequence(sequenceId, changes) {
+    const { model, operation } = updateSequenceOp(get().model, { sequenceId, changes }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  deleteSequence(sequenceId) {
+    const { model, operation } = deleteSequenceOp(get().model, { sequenceId }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  createView(view) {
+    const { model, operation } = createViewOp(get().model, { view }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  updateView(viewId, changes) {
+    const { model, operation } = updateViewOp(get().model, { viewId, changes }, ACTOR_ID);
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  deleteView(viewId) {
+    const { model, operation } = deleteViewOp(get().model, { viewId }, ACTOR_ID);
     history.push(operation);
     set({ model, issues: validateModel(model), ...historyFlags() });
   },

@@ -144,4 +144,21 @@ describe("toNativeSchema (SQL)", () => {
     expect(status?.type).toBe("text");
     expect(status?.checkValues).toBeUndefined();
   });
+
+  it("maps Model.sequences through to SqlSequenceDef", () => {
+    const model = shopModel();
+    model.sequences = [{ id: "s1", name: "order_seq", start: 100, increment: 5 }];
+    const schema = toNativeSchema(model, dialect);
+    expect(schema.sequences).toEqual([{ name: "order_seq", start: 100, increment: 5 }]);
+  });
+
+  it("maps a View with sql through to SqlViewDef, skipping one with no sql", () => {
+    const model = shopModel();
+    model.views = [
+      { id: "v1", name: "active_orders", sql: "SELECT * FROM purchase_order" },
+      { id: "v2", name: "no_sql_yet" },
+    ];
+    const schema = toNativeSchema(model, dialect);
+    expect(schema.views).toEqual([{ name: "active_orders", sql: "SELECT * FROM purchase_order" }]);
+  });
 });

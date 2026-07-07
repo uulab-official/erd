@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createPostgresDialect } from "./dialect.js";
+import { createMySqlDialect } from "./mysql.js";
 import { planSqlDeployment, rollbackSqlPlan } from "./plan.js";
 import { customerEntity, shopModel } from "./test-fixtures.js";
 import type { Model } from "@modelforge/schema-engine";
@@ -156,6 +157,56 @@ describe("planSqlDeployment", () => {
     const plan = planSqlDeployment(current, deployed, dialect);
     const statusStep = plan.steps.find((s) => s.target === "customer.status");
     expect(statusStep?.warning).toMatch(/enum values.*isn't captured/i);
+  });
+
+  it("plans create-sequence/create-view when a Sequence/View is added", () => {
+    const model = shopModel();
+    model.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];
+    model.views = [{ id: "v1", name: "active_orders", sql: "SELECT * FROM purchase_order" }];
+    const plan = planSqlDeployment(model, null, dialect);
+    expect(plan.steps).toContainEqual(
+      expect.objectContaining({ action: "create-sequence", target: "order_seq" }),
+    );
+    expect(plan.steps).toContainEqual(
+      expect.objectContaining({ action: "create-view", target: "active_orders" }),
+    );
+  });
+
+  it("plans drop-sequence/drop-view when a Sequence/View is removed", () => {
+    const deployed = shopModel();
+    deployed.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];
+    deployed.views = [{ id: "v1", name: "active_orders", sql: "SELECT * FROM purchase_order" }];
+    const current = { ...deployed, sequences: [], views: [] };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    expect(plan.steps).toContainEqual(
+      expect.objectContaining({ action: "drop-sequence", target: "order_seq", destructive: true }),
+    );
+    expect(plan.steps).toContainEqual(
+      expect.objectContaining({ action: "drop-view", target: "active_orders", destructive: true }),
+    );
+  });
+
+  it("plans a drop-then-create-view when a View's query changes", () => {
+    const deployed = shopModel();
+    deployed.views = [{ id: "v1", name: "active_orders", sql: "SELECT * FROM purchase_order" }];
+    const current = {
+      ...deployed,
+      views: [{ id: "v1", name: "active_orders", sql: "SELECT * FROM purchase_order WHERE 1=1" }],
+    };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const step = plan.steps.find((s) => s.target === "active_orders");
+    expect(step?.action).toBe("create-view");
+    expect(step?.sql).toContain("DROP VIEW");
+    expect(step?.sql).toContain("CREATE VIEW");
+  });
+
+  it("warns instead of guessing at sequence DDL for a dialect with no native sequence support", () => {
+    const mysqlDialect = createMySqlDialect();
+    const model = shopModel();
+    model.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];
+    const plan = planSqlDeployment(model, null, mysqlDialect);
+    const step = plan.steps.find((s) => s.action === "create-sequence");
+    expect(step?.warning).toMatch(/no native sequence object/i);
   });
 });
 
