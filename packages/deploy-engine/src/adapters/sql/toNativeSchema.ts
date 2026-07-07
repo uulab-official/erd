@@ -40,6 +40,7 @@ function toTable(entity: Entity, model: Model, dialect: SqlDialect): SqlTableDef
       default: attr.default ?? null,
       ...(enumType && !dialect.enumColumnType ? { checkValues: enumType.values } : {}),
       ...(attr.id === soleAutoIncrementAttribute?.id ? { autoIncrement: true } : {}),
+      ...(attr.comment ? { comment: attr.comment } : {}),
     };
   });
 

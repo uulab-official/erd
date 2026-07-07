@@ -52,6 +52,11 @@ export interface SqlDialect {
   readonly supportsSequences: boolean;
   createSequenceDDL(sequence: SqlSequenceDef): string;
   dropSequenceDDL(sequenceName: string): string;
+  // Standalone `COMMENT ON COLUMN` statement (PostgreSQL) — MySQL instead bakes the
+  // comment inline into columnDDL itself (see SqlDialectOptions.columnCommentSuffix),
+  // and SQLite has no column-comment feature at all, so both omit this hook entirely
+  // rather than returning "" (there's nothing for a caller to conditionally skip).
+  columnCommentDDL?(tableName: string, column: SqlColumnDef): string;
 }
 
 function formatDefault(value: SqlColumnDef["default"]): string {
@@ -103,6 +108,12 @@ export interface SqlDialectOptions {
   enumColumnType?(values: string[]): string;
   // Only PostgreSQL sets this — see SqlDialect.supportsSequences.
   supportsSequences?: boolean;
+  // MySQL: appended to the column definition (" COMMENT 'text'").
+  columnCommentSuffix?(comment: string): string;
+  // PostgreSQL: standalone `COMMENT ON COLUMN` syntax is standard SQL and identical for
+  // any dialect that has it, so a boolean flag is enough — createSqlDialect builds the
+  // generic columnCommentDDL implementation itself, the same shape as supportsSequences.
+  supportsColumnComments?: boolean;
 }
 
 // Generic implementation of columnDDL/createTableDDL/createIndexDDL/foreignKeyDDL shared
@@ -118,20 +129,25 @@ export function createSqlDialect(options: SqlDialectOptions): SqlDialect {
     inlinePrimaryKeyOnAutoIncrement,
     enumColumnType,
     supportsSequences = false,
+    columnCommentSuffix,
+    supportsColumnComments = false,
   } = options;
 
   const columnDDL: SqlDialect["columnDDL"] = (column) => {
     const checkClause = formatCheckClause(column, quoteIdentifier);
+    const commentSuffix =
+      column.comment && columnCommentSuffix ? columnCommentSuffix(column.comment) : "";
     if (column.autoIncrement && inlinePrimaryKeyOnAutoIncrement) {
       // SQLite: type + PRIMARY KEY + AUTOINCREMENT all live on the column itself; the
       // caller (createTableDDL) omits this column from the separate PRIMARY KEY (...)
-      // line so it isn't declared twice.
+      // line so it isn't declared twice. SQLite has no comment feature at all, so
+      // commentSuffix is always "" here regardless.
       return `${quoteIdentifier(column.name)} ${column.type} PRIMARY KEY AUTOINCREMENT${checkClause}`;
     }
     const type =
       column.autoIncrement && autoIncrementType ? autoIncrementType(column.type) : column.type;
     const suffix = column.autoIncrement && autoIncrementSuffix ? autoIncrementSuffix : "";
-    return `${quoteIdentifier(column.name)} ${type}${column.nullable ? "" : " NOT NULL"}${formatDefault(column.default)}${suffix}${checkClause}`;
+    return `${quoteIdentifier(column.name)} ${type}${column.nullable ? "" : " NOT NULL"}${formatDefault(column.default)}${suffix}${checkClause}${commentSuffix}`;
   };
 
   const inlineForeignKeyDDL = (fk: SqlForeignKeyDef): string =>
@@ -177,6 +193,9 @@ export function createSqlDialect(options: SqlDialectOptions): SqlDialect {
   const dropSequenceDDL: SqlDialect["dropSequenceDDL"] = (sequenceName) =>
     supportsSequences ? `DROP SEQUENCE ${quoteIdentifier(sequenceName)};` : "";
 
+  const columnCommentDDL: SqlDialect["columnCommentDDL"] = (tableName, column) =>
+    `COMMENT ON COLUMN ${quoteIdentifier(tableName)}.${quoteIdentifier(column.name)} IS '${(column.comment ?? "").replace(/'/g, "''")}';`;
+
   return {
     name: options.name,
     supportsAlterForeignKey,
@@ -185,6 +204,7 @@ export function createSqlDialect(options: SqlDialectOptions): SqlDialect {
     mapType: options.mapType,
     mapTypeBack: options.mapTypeBack,
     ...(enumColumnType ? { enumColumnType } : {}),
+    ...(supportsColumnComments ? { columnCommentDDL } : {}),
     columnDDL,
     createTableDDL,
     createIndexDDL,
@@ -264,5 +284,6 @@ export function createPostgresDialect(): SqlDialect {
     // integer/bigint plus an implicitly-created sequence and DEFAULT nextval(...).
     autoIncrementType: (mappedType) => (mappedType === "bigint" ? "bigserial" : "serial"),
     supportsSequences: true,
+    supportsColumnComments: true,
   });
 }

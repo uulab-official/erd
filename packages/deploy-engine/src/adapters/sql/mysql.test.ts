@@ -61,6 +61,18 @@ describe("createMySqlDialect", () => {
       dialect.columnDDL({ name: "id", type: "int", nullable: false, autoIncrement: true }),
     ).toBe("`id` int NOT NULL AUTO_INCREMENT");
   });
+
+  it("bakes the column comment inline (no standalone COMMENT ON COLUMN)", () => {
+    expect(
+      dialect.columnDDL({
+        name: "email",
+        type: "varchar(320)",
+        nullable: false,
+        comment: "it's the primary contact",
+      }),
+    ).toBe("`email` varchar(320) NOT NULL COMMENT 'it''s the primary contact'");
+    expect(dialect.columnCommentDDL).toBeUndefined();
+  });
 });
 
 describe("createMySQLAdapter", () => {

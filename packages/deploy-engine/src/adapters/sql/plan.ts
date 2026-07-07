@@ -166,6 +166,15 @@ export function planSqlDeployment(
             "Changing this column's allowed enum values isn't captured by this statement — drop and recreate the CHECK constraint manually.",
           );
         }
+        // A comment-only change also repeats the same base type in this generic
+        // statement (MySQL bakes its comment into the column definition itself;
+        // PostgreSQL's separate COMMENT ON COLUMN isn't emitted here at all) — same
+        // "don't guess, warn" policy as the two cases above.
+        if ((existing.comment ?? "") !== (column.comment ?? "")) {
+          warnings.push(
+            "Changing this column's comment isn't captured by this statement — apply it manually.",
+          );
+        }
         steps.push({
           action: "alter-attribute",
           target: `${table.name}.${column.name}`,

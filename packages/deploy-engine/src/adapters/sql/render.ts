@@ -17,6 +17,16 @@ export function renderSql(schema: SqlNativeSchema, dialect: SqlDialect): string 
   for (const table of schema.tables) {
     statements.push(dialect.createTableDDL(table));
   }
+  // Only a dialect with standalone COMMENT ON COLUMN syntax (PostgreSQL) implements this
+  // hook at all — MySQL bakes its comment inline into columnDDL above, and SQLite has no
+  // column-comment feature, so both simply have no columnCommentDDL to call here.
+  if (dialect.columnCommentDDL) {
+    for (const table of schema.tables) {
+      for (const column of table.columns) {
+        if (column.comment) statements.push(dialect.columnCommentDDL(table.name, column));
+      }
+    }
+  }
   for (const table of schema.tables) {
     for (const index of table.indexes) {
       statements.push(dialect.createIndexDDL(index, table.name));

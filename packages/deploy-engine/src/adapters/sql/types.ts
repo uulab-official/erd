@@ -19,6 +19,10 @@ export interface SqlColumnDef {
   // `CHECK (col IN (...))` clause. When the dialect *does* have a native enum type
   // (MySQL's `enum(...)`), the values are baked into `type` instead and this is omitted.
   checkValues?: string[];
+  // Attribute.comment, a free-text data-dictionary note (already rendered in Markdown
+  // exports) — no functional effect on the deployed schema, so a dialect with no
+  // comment support (SQLite) simply omits it rather than warning.
+  comment?: string;
 }
 
 export interface SqlIndexDef {

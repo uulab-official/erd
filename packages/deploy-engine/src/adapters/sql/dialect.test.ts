@@ -119,4 +119,18 @@ describe("createPostgresDialect", () => {
     );
     expect(dialect.dropSequenceDDL("order_seq")).toBe('DROP SEQUENCE "order_seq";');
   });
+
+  it("supports column comments via a standalone COMMENT ON COLUMN statement", () => {
+    expect(
+      dialect.columnDDL({ name: "email", type: "varchar(320)", nullable: false }),
+    ).not.toContain("COMMENT");
+    expect(
+      dialect.columnCommentDDL?.("customer", {
+        name: "email",
+        type: "varchar(320)",
+        nullable: false,
+        comment: "it's the primary contact",
+      }),
+    ).toBe(`COMMENT ON COLUMN "customer"."email" IS 'it''s the primary contact';`);
+  });
 });

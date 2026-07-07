@@ -159,6 +159,42 @@ describe("planSqlDeployment", () => {
     expect(statusStep?.warning).toMatch(/enum values.*isn't captured/i);
   });
 
+  it("warns when a column's comment changes, since the ALTER statement can't express it", () => {
+    const deployed = shopModel();
+    const current: Model = {
+      ...deployed,
+      entities: [
+        {
+          ...customerEntity(),
+          attributes: customerEntity().attributes.map((a) =>
+            a.name === "email" ? { ...a, comment: "primary contact address" } : a,
+          ),
+        },
+        deployed.entities[1]!,
+      ],
+    };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const emailStep = plan.steps.find((s) => s.target === "customer.email");
+    expect(emailStep?.warning).toMatch(/comment.*isn't captured/i);
+  });
+
+  it("does not add the comment warning for an unrelated column change", () => {
+    const deployed = shopModel();
+    const current: Model = {
+      ...deployed,
+      entities: [
+        {
+          ...customerEntity(),
+          attributes: customerEntity().attributes.map((a) => ({ ...a, nullable: true })),
+        },
+        deployed.entities[1]!,
+      ],
+    };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const emailStep = plan.steps.find((s) => s.target === "customer.email");
+    expect(emailStep?.warning).not.toMatch(/comment/i);
+  });
+
   it("plans create-sequence/create-view when a Sequence/View is added", () => {
     const model = shopModel();
     model.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];

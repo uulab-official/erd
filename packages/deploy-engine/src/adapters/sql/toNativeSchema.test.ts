@@ -161,4 +161,20 @@ describe("toNativeSchema (SQL)", () => {
     const schema = toNativeSchema(model, dialect);
     expect(schema.views).toEqual([{ name: "active_orders", sql: "SELECT * FROM purchase_order" }]);
   });
+
+  it("carries Attribute.comment through to SqlColumnDef.comment", () => {
+    const model = shopModel();
+    model.entities[0]!.attributes[1]!.comment = "customer's primary email address";
+    const schema = toNativeSchema(model, dialect);
+    const customer = schema.tables.find((t) => t.name === "customer");
+    expect(customer?.columns.find((c) => c.name === "email")?.comment).toBe(
+      "customer's primary email address",
+    );
+  });
+
+  it("omits comment from SqlColumnDef when the attribute has none", () => {
+    const schema = toNativeSchema(shopModel(), dialect);
+    const customer = schema.tables.find((t) => t.name === "customer");
+    expect(customer?.columns.find((c) => c.name === "email")?.comment).toBeUndefined();
+  });
 });

@@ -66,5 +66,8 @@ export function createMySqlDialect(): SqlDialect {
     autoIncrementSuffix: " AUTO_INCREMENT",
     enumColumnType: (values) =>
       `enum(${values.map((v) => `'${v.replace(/'/g, "''")}'`).join(", ")})`,
+    // MySQL has no standalone COMMENT ON COLUMN — the comment is part of the column
+    // definition itself.
+    columnCommentSuffix: (comment) => ` COMMENT '${comment.replace(/'/g, "''")}'`,
   });
 }

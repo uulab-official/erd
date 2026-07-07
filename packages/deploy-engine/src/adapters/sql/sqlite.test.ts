@@ -98,6 +98,18 @@ describe("planSqlDeployment with SQLite", () => {
     const plan = planSqlDeployment(shopModel(), null, dialect);
     expect(plan.adapterKind).toBe("sqlite");
   });
+
+  it("has no column comment support at all — the comment is silently dropped", () => {
+    expect(dialect.columnCommentDDL).toBeUndefined();
+    expect(
+      dialect.columnDDL({
+        name: "email",
+        type: "text",
+        nullable: false,
+        comment: "the primary contact",
+      }),
+    ).not.toContain("comment");
+  });
 });
 
 describe("createSQLiteAdapter", () => {
