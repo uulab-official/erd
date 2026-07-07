@@ -69,6 +69,11 @@ export interface SetAttributeDefaultPayload {
   attributeId: string;
   default: Attribute["default"];
 }
+export interface SetAttributeCommentPayload {
+  entityId: string;
+  attributeId: string;
+  comment: Attribute["comment"];
+}
 
 export interface AssignDomainPayload {
   entityId: string;
@@ -249,6 +254,7 @@ export interface OperationPayloadMap {
   ChangeAttributeType: ChangeAttributeTypePayload;
   SetAttributeFlags: SetAttributeFlagsPayload;
   SetAttributeDefault: SetAttributeDefaultPayload;
+  SetAttributeComment: SetAttributeCommentPayload;
   AssignDomain: AssignDomainPayload;
   UnassignDomain: UnassignDomainPayload;
   CreateIndex: CreateIndexPayload;

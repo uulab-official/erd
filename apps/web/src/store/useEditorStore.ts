@@ -52,6 +52,7 @@ import {
   removeAttribute as removeAttributeOp,
   renameAttribute as renameAttributeOp,
   renameEntity as renameEntityOp,
+  setAttributeComment as setAttributeCommentOp,
   setAttributeDefault as setAttributeDefaultOp,
   setAttributeFlags as setAttributeFlagsOp,
   setRelationshipMeta as setRelationshipMetaOp,
@@ -147,6 +148,7 @@ interface EditorState {
     flags: Partial<Pick<Attribute, "nullable" | "isPrimaryKey" | "isForeignKey" | "isUnique">>,
   ): void;
   setAttributeDefault(entityId: string, attributeId: string, value: Attribute["default"]): void;
+  setAttributeComment(entityId: string, attributeId: string, value: Attribute["comment"]): void;
   createIndex(entityId: string, index: Index): void;
   deleteIndex(entityId: string, indexId: string): void;
   // Relationship Inspector — see components/RelationshipInspector.tsx.
@@ -371,6 +373,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const { model, operation } = setAttributeDefaultOp(
       get().model,
       { entityId, attributeId, default: value },
+      ACTOR_ID,
+    );
+    history.push(operation);
+    set({ model, issues: validateModel(model), ...historyFlags() });
+  },
+
+  setAttributeComment(entityId, attributeId, value) {
+    const { model, operation } = setAttributeCommentOp(
+      get().model,
+      { entityId, attributeId, comment: value },
       ACTOR_ID,
     );
     history.push(operation);

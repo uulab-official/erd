@@ -6,6 +6,7 @@ import type {
   ChangeAttributeTypePayload,
   RemoveAttributePayload,
   RenameAttributePayload,
+  SetAttributeCommentPayload,
   SetAttributeDefaultPayload,
   SetAttributeFlagsPayload,
   UnassignDomainPayload,
@@ -19,6 +20,7 @@ export interface AttributeOpResult<
     | "ChangeAttributeType"
     | "SetAttributeFlags"
     | "SetAttributeDefault"
+    | "SetAttributeComment"
     | "AssignDomain"
     | "UnassignDomain",
 > {
@@ -267,5 +269,24 @@ export function setAttributeDefault(
     default: attribute.default,
   });
   const operation = buildOperation("SetAttributeDefault", model.id, payload, inverse, actorId);
+  return { model: nextModel, operation };
+}
+
+export function setAttributeComment(
+  model: Model,
+  payload: SetAttributeCommentPayload,
+  actorId: string,
+): AttributeOpResult<"SetAttributeComment"> {
+  const entity = requireEntity(model, payload.entityId);
+  const attribute = requireAttribute(entity, payload.attributeId);
+  const nextModel = updateEntityAttributes(model, entity.id, (attrs) =>
+    attrs.map((a) => (a.id === attribute.id ? { ...a, comment: payload.comment } : a)),
+  );
+  const inverse = inverseOf("SetAttributeComment", {
+    entityId: entity.id,
+    attributeId: attribute.id,
+    comment: attribute.comment,
+  });
+  const operation = buildOperation("SetAttributeComment", model.id, payload, inverse, actorId);
   return { model: nextModel, operation };
 }

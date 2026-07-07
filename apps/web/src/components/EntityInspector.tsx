@@ -32,6 +32,7 @@ export function EntityInspector() {
     renameAttribute,
     changeAttributeType,
     setAttributeFlags,
+    setAttributeComment,
     assignDomain,
     unassignDomain,
     createIndex,
@@ -230,6 +231,16 @@ export function EntityInspector() {
                   ))}
                 </Select>
               )}
+
+              <Input
+                key={`${attribute.id}-comment`}
+                defaultValue={attribute.comment ?? ""}
+                placeholder="Comment (data dictionary note, also emitted as a SQL column comment)"
+                className="text-xs"
+                onBlur={(e) =>
+                  setAttributeComment(entity.id, attribute.id, e.target.value || undefined)
+                }
+              />
             </div>
           ))}
         </div>

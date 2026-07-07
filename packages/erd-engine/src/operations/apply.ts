@@ -89,6 +89,12 @@ export function applyOperation(model: Model, op: DispatchableOperation): Model {
         op.payload as OperationPayloadMap["SetAttributeDefault"],
         REPLAY_ACTOR,
       ).model;
+    case "SetAttributeComment":
+      return attributeOps.setAttributeComment(
+        model,
+        op.payload as OperationPayloadMap["SetAttributeComment"],
+        REPLAY_ACTOR,
+      ).model;
     case "AssignDomain":
       return attributeOps.assignDomain(
         model,

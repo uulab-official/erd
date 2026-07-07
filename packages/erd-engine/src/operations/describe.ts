@@ -14,6 +14,7 @@ const LABELS: Record<OperationType, string> = {
   ChangeAttributeType: "Change attribute type",
   SetAttributeFlags: "Update attribute flags",
   SetAttributeDefault: "Set attribute default",
+  SetAttributeComment: "Set attribute comment",
   AssignDomain: "Assign domain",
   UnassignDomain: "Unassign domain",
   CreateIndex: "Create index",
