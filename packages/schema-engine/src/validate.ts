@@ -270,36 +270,33 @@ function checkNamingConventions(model: Model): ValidationIssue[] {
   return issues;
 }
 
-// Suggests the configured abbreviation when a name spells out a word it has a shorthand
-// for (e.g. "customer_identifier" when abbreviations maps "identifier" -> "id") — split on
-// case/underscore boundaries so this works under any NamingRuleSet.case.
-function checkAbbreviations(model: Model): ValidationIssue[] {
-  const abbreviations: Record<string, string> = model.namingRules?.abbreviations ?? {};
-  if (Object.keys(abbreviations).length === 0) return [];
+// Splits a name on case/underscore boundaries into words, preserving each word's original
+// casing — shared by checkAbbreviations and checkDictionaryTerms so both work under any
+// NamingRuleSet.case. Callers lowercase individual words themselves for case-insensitive
+// lookups; checkDictionaryTerms also needs the original casing to compare against
+// standardName's exact spelling.
+function wordsOf(name: string): string[] {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .split(/[_\s]+/)
+    .filter(Boolean);
+}
+
+// Runs `findViolation` over every entity/attribute name and reports each hit under the
+// given issue code — shared by checkAbbreviations and checkDictionaryTerms, which only
+// differ in what counts as a violation.
+function checkNamesFor(
+  model: Model,
+  code: string,
+  findViolation: (name: string) => string | undefined,
+): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-
-  function wordsOf(name: string): string[] {
-    return name
-      .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-      .split(/[_\s]+/)
-      .map((w) => w.toLowerCase())
-      .filter(Boolean);
-  }
-
-  function findViolation(name: string): string | undefined {
-    for (const word of wordsOf(name)) {
-      const abbreviation = abbreviations[word];
-      if (abbreviation) return `should abbreviate "${word}" as "${abbreviation}"`;
-    }
-    return undefined;
-  }
-
   for (const entity of model.entities) {
     const entityIssue = findViolation(entity.physicalName);
     if (entityIssue) {
       issues.push({
         severity: "warning",
-        code: "abbreviation-suggested",
+        code,
         message: `Entity physical name "${entity.physicalName}" ${entityIssue}.`,
         entityId: entity.id,
       });
@@ -309,7 +306,7 @@ function checkAbbreviations(model: Model): ValidationIssue[] {
       if (attrIssue) {
         issues.push({
           severity: "warning",
-          code: "abbreviation-suggested",
+          code,
           message: `Attribute "${attr.name}" on entity "${entity.logicalName}" ${attrIssue}.`,
           entityId: entity.id,
           attributeId: attr.id,
@@ -317,8 +314,47 @@ function checkAbbreviations(model: Model): ValidationIssue[] {
       }
     }
   }
-
   return issues;
+}
+
+// Suggests the configured abbreviation when a name spells out a word it has a shorthand
+// for (e.g. "customer_identifier" when abbreviations maps "identifier" -> "id").
+function checkAbbreviations(model: Model): ValidationIssue[] {
+  const abbreviations: Record<string, string> = model.namingRules?.abbreviations ?? {};
+  if (Object.keys(abbreviations).length === 0) return [];
+
+  return checkNamesFor(model, "abbreviation-suggested", (name) => {
+    for (const word of wordsOf(name)) {
+      const abbreviation = abbreviations[word.toLowerCase()];
+      if (abbreviation) return `should abbreviate "${word}" as "${abbreviation}"`;
+    }
+    return undefined;
+  });
+}
+
+// Model.dictionary maps a business term to its standardized spelling (e.g. logicalTerm
+// "customer" -> standardName "Cust") — the same per-word shorthand shape as
+// NamingRuleSet.abbreviations, but this was never actually consulted anywhere: the
+// Governance UI lets you create/edit entries, but no validation or generator ever read
+// Model.dictionary (checkAbbreviations only reads namingRules.abbreviations). Comparison
+// is case-sensitive against standardName, since the whole point is to enforce a specific
+// spelling/casing (e.g. "Cust" vs "cust"), not just presence of the right word.
+function checkDictionaryTerms(model: Model): ValidationIssue[] {
+  const entries = model.dictionary ?? [];
+  if (entries.length === 0) return [];
+  const standardNameByTerm = new Map(
+    entries.map((e) => [e.logicalTerm.toLowerCase(), e.standardName]),
+  );
+
+  return checkNamesFor(model, "dictionary-term-suggested", (name) => {
+    for (const word of wordsOf(name)) {
+      const standardName = standardNameByTerm.get(word.toLowerCase());
+      if (standardName && standardName !== word) {
+        return `should use the standard term "${standardName}" instead of "${word}"`;
+      }
+    }
+    return undefined;
+  });
 }
 
 // A Domain governs the type/length/scale of every Attribute assigned to it (erwin-style
@@ -466,6 +502,7 @@ export function validateModel(model: Model, reservedWords?: string[]): Validatio
     ...checkCircularIdentifyingRelationships(model),
     ...checkNamingConventions(model),
     ...checkAbbreviations(model),
+    ...checkDictionaryTerms(model),
     ...checkDomainDrift(model),
     ...checkEnumIntegrity(model),
   ];
