@@ -27,6 +27,13 @@ describe("createDomain / deleteDomain", () => {
     expect(() => createDomain(before, { domain: EMAIL_DOMAIN }, "user-1")).toThrow();
   });
 
+  it("rejects creating a domain with a duplicate name (different id)", () => {
+    const before = createDomain(emptyModel(), { domain: EMAIL_DOMAIN }, "user-1").model;
+    expect(() =>
+      createDomain(before, { domain: { ...EMAIL_DOMAIN, id: "d2" } }, "user-1"),
+    ).toThrow();
+  });
+
   it("deletes a domain and its inverse restores it", () => {
     const before = createDomain(emptyModel(), { domain: EMAIL_DOMAIN }, "user-1").model;
     const { model, operation } = deleteDomain(before, { domainId: "d1" }, "user-1");
@@ -78,6 +85,18 @@ describe("updateDomain", () => {
     );
     expect(model.domains?.[0]).toMatchObject({ length: 255, name: "Email" });
     expect(applyInverse(model, operation)).toEqual(before);
+  });
+
+  it("rejects renaming a domain to a name already used by another domain", () => {
+    let model = createDomain(emptyModel(), { domain: EMAIL_DOMAIN }, "user-1").model;
+    model = createDomain(
+      model,
+      { domain: { id: "d2", name: "Phone", type: "string", length: 20 } },
+      "user-1",
+    ).model;
+    expect(() =>
+      updateDomain(model, { domainId: "d2", changes: { name: "Email" } }, "user-1"),
+    ).toThrow();
   });
 });
 

@@ -29,6 +29,11 @@ describe("createEnum / deleteEnum", () => {
     expect(() => createEnum(before, { enumType: STATUS }, "user-1")).toThrow();
   });
 
+  it("throws when creating a duplicate name (different id)", () => {
+    const before = createEnum(baseModel(), { enumType: STATUS }, "user-1").model;
+    expect(() => createEnum(before, { enumType: { ...STATUS, id: "e2" } }, "user-1")).toThrow();
+  });
+
   it("deleteEnum throws when an attribute is still assigned", () => {
     const withEnum = createEnum(baseModel(), { enumType: STATUS }, "user-1").model;
     const assigned = assignEnumToAttribute(

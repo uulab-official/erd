@@ -435,6 +435,54 @@ function checkEnumIntegrity(model: Model): ValidationIssue[] {
   return issues;
 }
 
+// Domain/Enum/SubjectArea names have no Operation-level duplicate check (createDomain/
+// createEnum/createSubjectArea only reject a duplicate id, never a duplicate name), so a
+// Model that arrived via import/restore/manual edit could carry two Domains, Enums, or
+// Subject Areas sharing a name with no diagnostic trail — confusing in the Governance UI
+// (which lists them by name) and, for Enum specifically, ambiguous for any consumer that
+// looks Enums up by name rather than id.
+function checkDuplicateGovernanceNames(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  const seenDomainNames = new Set<string>();
+  for (const domain of model.domains ?? []) {
+    if (seenDomainNames.has(domain.name)) {
+      issues.push({
+        severity: "error",
+        code: "duplicate-domain-name",
+        message: `Duplicate domain name "${domain.name}".`,
+      });
+    }
+    seenDomainNames.add(domain.name);
+  }
+
+  const seenEnumNames = new Set<string>();
+  for (const enumType of model.enums) {
+    if (seenEnumNames.has(enumType.name)) {
+      issues.push({
+        severity: "error",
+        code: "duplicate-enum-name",
+        message: `Duplicate enum name "${enumType.name}".`,
+      });
+    }
+    seenEnumNames.add(enumType.name);
+  }
+
+  const seenSubjectAreaNames = new Set<string>();
+  for (const subjectArea of model.subjectAreas ?? []) {
+    if (seenSubjectAreaNames.has(subjectArea.name)) {
+      issues.push({
+        severity: "error",
+        code: "duplicate-subject-area-name",
+        message: `Duplicate subject area name "${subjectArea.name}".`,
+      });
+    }
+    seenSubjectAreaNames.add(subjectArea.name);
+  }
+
+  return issues;
+}
+
 // Sequence/View names have no Operation-level duplicate check until now (mirrors the
 // "created via Operation guard, but nothing re-checks a Model that arrived a different
 // way" gap that domain/enum integrity checks above close) — two Sequences or Views
@@ -549,6 +597,7 @@ export function validateModel(model: Model, reservedWords?: string[]): Validatio
     ...checkDictionaryTerms(model),
     ...checkDomainDrift(model),
     ...checkEnumIntegrity(model),
+    ...checkDuplicateGovernanceNames(model),
     ...checkDatabaseObjects(model),
   ];
 }

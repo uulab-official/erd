@@ -771,6 +771,44 @@ describe("validateModel", () => {
     expect(codes).not.toContain("enum-not-found");
   });
 
+  it("flags duplicate domain names", () => {
+    const model = emptyModel();
+    model.domains = [
+      { id: "d1", name: "Email", type: "string", length: 320 },
+      { id: "d2", name: "Email", type: "string", length: 320 },
+    ];
+    expect(validateModel(model).map((i) => i.code)).toContain("duplicate-domain-name");
+  });
+
+  it("flags duplicate enum names", () => {
+    const model = emptyModel();
+    model.enums = [
+      { id: "e1", name: "OrderStatus", values: ["pending"] },
+      { id: "e2", name: "OrderStatus", values: ["shipped"] },
+    ];
+    expect(validateModel(model).map((i) => i.code)).toContain("duplicate-enum-name");
+  });
+
+  it("flags duplicate subject area names", () => {
+    const model = emptyModel();
+    model.subjectAreas = [
+      { id: "sa1", name: "Sales", entityIds: [] },
+      { id: "sa2", name: "Sales", entityIds: [] },
+    ];
+    expect(validateModel(model).map((i) => i.code)).toContain("duplicate-subject-area-name");
+  });
+
+  it("does not flag unique domain/enum/subject area names", () => {
+    const model = emptyModel();
+    model.domains = [{ id: "d1", name: "Email", type: "string", length: 320 }];
+    model.enums = [{ id: "e1", name: "OrderStatus", values: ["pending"] }];
+    model.subjectAreas = [{ id: "sa1", name: "Sales", entityIds: [] }];
+    const codes = validateModel(model).map((i) => i.code);
+    expect(codes).not.toContain("duplicate-domain-name");
+    expect(codes).not.toContain("duplicate-enum-name");
+    expect(codes).not.toContain("duplicate-subject-area-name");
+  });
+
   it("flags duplicate sequence names", () => {
     const model = emptyModel();
     model.sequences = [

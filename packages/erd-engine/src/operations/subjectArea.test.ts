@@ -31,6 +31,13 @@ describe("createSubjectArea / deleteSubjectArea", () => {
     expect(() => createSubjectArea(before, { subjectArea: SALES }, "user-1")).toThrow();
   });
 
+  it("throws when creating a duplicate name (different id)", () => {
+    const before = createSubjectArea(twoEntityModel(), { subjectArea: SALES }, "user-1").model;
+    expect(() =>
+      createSubjectArea(before, { subjectArea: { ...SALES, id: "sa2" } }, "user-1"),
+    ).toThrow();
+  });
+
   it("deleteSubjectArea throws when entities are still assigned", () => {
     const withArea = createSubjectArea(twoEntityModel(), { subjectArea: SALES }, "user-1").model;
     const withAssignment = assignEntityToSubjectArea(
@@ -59,6 +66,15 @@ describe("updateSubjectArea", () => {
     );
     expect(model.subjectAreas?.[0]).toMatchObject({ name: "Sales & CRM", color: "#f00" });
     expect(applyInverse(model, operation)).toEqual(before);
+  });
+
+  it("rejects renaming to a name already used by another subject area", () => {
+    const marketing = { id: "sa2", name: "Marketing", entityIds: [] as string[] };
+    let model = createSubjectArea(twoEntityModel(), { subjectArea: SALES }, "user-1").model;
+    model = createSubjectArea(model, { subjectArea: marketing }, "user-1").model;
+    expect(() =>
+      updateSubjectArea(model, { subjectAreaId: "sa2", changes: { name: "Sales" } }, "user-1"),
+    ).toThrow();
   });
 });
 

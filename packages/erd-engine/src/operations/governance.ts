@@ -44,6 +44,9 @@ export function createDomain(
   if ((model.domains ?? []).some((d) => d.id === payload.domain.id)) {
     throw new Error(`Domain "${payload.domain.id}" already exists`);
   }
+  if ((model.domains ?? []).some((d) => d.name === payload.domain.name)) {
+    throw new Error(`Domain named "${payload.domain.name}" already exists`);
+  }
   const nextModel: Model = { ...model, domains: [...(model.domains ?? []), payload.domain] };
   const inverse = inverseOf("DeleteDomain", { domainId: payload.domain.id });
   const operation = buildOperation("CreateDomain", model.id, payload, inverse, actorId);
@@ -59,6 +62,12 @@ export function updateDomain(
   actorId: string,
 ): GovernanceOpResult<"UpdateDomain"> {
   const domain = requireDomain(model, payload.domainId);
+  if (
+    payload.changes.name !== undefined &&
+    (model.domains ?? []).some((d) => d.id !== domain.id && d.name === payload.changes.name)
+  ) {
+    throw new Error(`Domain named "${payload.changes.name}" already exists`);
+  }
   const previousChanges: UpdateDomainPayload["changes"] = {};
   for (const key of Object.keys(payload.changes) as (keyof typeof payload.changes)[]) {
     (previousChanges as Record<string, unknown>)[key] = domain[key];

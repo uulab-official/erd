@@ -62,6 +62,9 @@ export function createEnum(
   if (model.enums.some((e) => e.id === payload.enumType.id)) {
     throw new Error(`Enum "${payload.enumType.id}" already exists`);
   }
+  if (model.enums.some((e) => e.name === payload.enumType.name)) {
+    throw new Error(`Enum named "${payload.enumType.name}" already exists`);
+  }
   const nextModel: Model = { ...model, enums: [...model.enums, payload.enumType] };
   const inverse = inverseOf("DeleteEnum", { enumId: payload.enumType.id });
   const operation = buildOperation("CreateEnum", model.id, payload, inverse, actorId);
