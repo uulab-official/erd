@@ -88,7 +88,13 @@ export function VersionsPanel() {
       compareDiff.enums.changed.length +
       compareDiff.relationships.added.length +
       compareDiff.relationships.removed.length +
-      compareDiff.relationships.changed.length
+      compareDiff.relationships.changed.length +
+      compareDiff.sequences.added.length +
+      compareDiff.sequences.removed.length +
+      compareDiff.sequences.changed.length +
+      compareDiff.views.added.length +
+      compareDiff.views.removed.length +
+      compareDiff.views.changed.length
     : 0;
 
   return (
@@ -202,6 +208,37 @@ export function VersionsPanel() {
                       <li key={`rel-changed-${id}`} className="text-amber-600">
                         ~ relationship {model.relationships.find((r) => r.id === id)?.name ?? id}{" "}
                         changed
+                      </li>
+                    ))}
+                    {compareDiff.sequences.added.map((id) => (
+                      <li key={`seq-added-${id}`} className="text-green-700">
+                        + sequence {model.sequences.find((s) => s.id === id)?.name ?? id} created
+                      </li>
+                    ))}
+                    {compareDiff.sequences.removed.map((id) => (
+                      <li key={`seq-removed-${id}`} className="text-red-600">
+                        - sequence {compareSnapshot?.sequences.find((s) => s.id === id)?.name ?? id}{" "}
+                        deleted
+                      </li>
+                    ))}
+                    {compareDiff.sequences.changed.map((id) => (
+                      <li key={`seq-changed-${id}`} className="text-amber-600">
+                        ~ sequence {model.sequences.find((s) => s.id === id)?.name ?? id} changed
+                      </li>
+                    ))}
+                    {compareDiff.views.added.map((id) => (
+                      <li key={`view-added-${id}`} className="text-green-700">
+                        + view {model.views.find((v) => v.id === id)?.name ?? id} created
+                      </li>
+                    ))}
+                    {compareDiff.views.removed.map((id) => (
+                      <li key={`view-removed-${id}`} className="text-red-600">
+                        - view {compareSnapshot?.views.find((v) => v.id === id)?.name ?? id} deleted
+                      </li>
+                    ))}
+                    {compareDiff.views.changed.map((id) => (
+                      <li key={`view-changed-${id}`} className="text-amber-600">
+                        ~ view {model.views.find((v) => v.id === id)?.name ?? id} changed
                       </li>
                     ))}
                   </ul>
