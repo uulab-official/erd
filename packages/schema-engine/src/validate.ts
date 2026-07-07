@@ -435,6 +435,50 @@ function checkEnumIntegrity(model: Model): ValidationIssue[] {
   return issues;
 }
 
+// Sequence/View names have no Operation-level duplicate check until now (mirrors the
+// "created via Operation guard, but nothing re-checks a Model that arrived a different
+// way" gap that domain/enum integrity checks above close) — two Sequences or Views
+// sharing a name would emit two colliding `CREATE SEQUENCE`/`CREATE VIEW` statements in
+// the SQL adapter. Also flags a View with no `sql` — the SQL adapter's toNativeSchema
+// silently excludes it from Deploy Plan, so a blanked-out View disappears with no trail.
+function checkDatabaseObjects(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  const seenSequenceNames = new Set<string>();
+  for (const sequence of model.sequences) {
+    if (seenSequenceNames.has(sequence.name)) {
+      issues.push({
+        severity: "error",
+        code: "duplicate-sequence-name",
+        message: `Duplicate sequence name "${sequence.name}".`,
+      });
+    }
+    seenSequenceNames.add(sequence.name);
+  }
+
+  const seenViewNames = new Set<string>();
+  for (const view of model.views) {
+    if (seenViewNames.has(view.name)) {
+      issues.push({
+        severity: "error",
+        code: "duplicate-view-name",
+        message: `Duplicate view name "${view.name}".`,
+      });
+    }
+    seenViewNames.add(view.name);
+
+    if (!view.sql?.trim()) {
+      issues.push({
+        severity: "warning",
+        code: "view-missing-sql",
+        message: `View "${view.name}" has no SQL — it will be skipped when deploying to a SQL adapter.`,
+      });
+    }
+  }
+
+  return issues;
+}
+
 // Identifying relationships form a parent -> child dependency: the child's primary key
 // includes the parent's. A cycle in that graph means no entity's PK could ever be
 // resolved, so it's a hard error, not just a modeling smell.
@@ -505,5 +549,6 @@ export function validateModel(model: Model, reservedWords?: string[]): Validatio
     ...checkDictionaryTerms(model),
     ...checkDomainDrift(model),
     ...checkEnumIntegrity(model),
+    ...checkDatabaseObjects(model),
   ];
 }

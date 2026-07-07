@@ -106,6 +106,29 @@ describe("renderMarkdown", () => {
     expect(md).toContain("| status | enum(?) |");
     expect(md).not.toContain("## Enums");
   });
+
+  it("includes a Sequences table when sequences exist", () => {
+    const model = shopModel();
+    model.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];
+    const md = renderMarkdown(model);
+    expect(md).toContain("## Sequences");
+    expect(md).toContain("| order_seq | 1 | 1 |");
+  });
+
+  it("includes a Views section with a fenced sql block when views exist", () => {
+    const model = shopModel();
+    model.views = [{ id: "v1", name: "active_orders", sql: "SELECT * FROM orders" }];
+    const md = renderMarkdown(model);
+    expect(md).toContain("## Views");
+    expect(md).toContain("### active_orders");
+    expect(md).toContain("```sql\nSELECT * FROM orders\n```");
+  });
+
+  it("omits Sequences/Views sections when there are none", () => {
+    const md = renderMarkdown(shopModel());
+    expect(md).not.toContain("## Sequences");
+    expect(md).not.toContain("## Views");
+  });
 });
 
 describe("markdownExporter", () => {
