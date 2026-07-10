@@ -177,4 +177,26 @@ describe("toNativeSchema (SQL)", () => {
     const customer = schema.tables.find((t) => t.name === "customer");
     expect(customer?.columns.find((c) => c.name === "email")?.comment).toBeUndefined();
   });
+
+  it("carries a non-PK Attribute.isUnique through to SqlColumnDef.unique", () => {
+    const schema = toNativeSchema(shopModel(), dialect);
+    const customer = schema.tables.find((t) => t.name === "customer");
+    // customerEntity()'s "email" attribute is isUnique: true and not the primary key.
+    expect(customer?.columns.find((c) => c.name === "email")?.unique).toBe(true);
+  });
+
+  it("does not set unique for a non-unique attribute", () => {
+    const schema = toNativeSchema(shopModel(), dialect);
+    const order = schema.tables.find((t) => t.name === "purchase_order");
+    // orderEntity()'s "customer_id" FK attribute is isUnique: false.
+    expect(order?.columns.find((c) => c.name === "customer_id")?.unique).toBeUndefined();
+  });
+
+  it("does not set unique for a PK attribute even though isUnique is also true", () => {
+    const schema = toNativeSchema(shopModel(), dialect);
+    const customer = schema.tables.find((t) => t.name === "customer");
+    // customerEntity()'s "id" attribute has both isPrimaryKey and isUnique true — the
+    // PRIMARY KEY constraint already enforces uniqueness, so unique should stay unset.
+    expect(customer?.columns.find((c) => c.name === "id")?.unique).toBeUndefined();
+  });
 });

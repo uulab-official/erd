@@ -23,6 +23,10 @@ export interface SqlColumnDef {
   // exports) — no functional effect on the deployed schema, so a dialect with no
   // comment support (SQLite) simply omits it rather than warning.
   comment?: string;
+  // Attribute.isUnique for a non-PK column — a PK is already implicitly unique via its
+  // PRIMARY KEY constraint, so toNativeSchema.ts only sets this when the column isn't
+  // also the (sole) primary key, to avoid a redundant/confusing UNIQUE alongside it.
+  unique?: boolean;
 }
 
 export interface SqlIndexDef {

@@ -120,6 +120,15 @@ describe("createPostgresDialect", () => {
     expect(dialect.dropSequenceDDL("order_seq")).toBe('DROP SEQUENCE "order_seq";');
   });
 
+  it("renders a UNIQUE constraint inline for a unique column", () => {
+    expect(
+      dialect.columnDDL({ name: "email", type: "varchar(320)", nullable: false, unique: true }),
+    ).toBe('"email" varchar(320) NOT NULL UNIQUE');
+    expect(
+      dialect.columnDDL({ name: "email", type: "varchar(320)", nullable: false }),
+    ).not.toContain("UNIQUE");
+  });
+
   it("supports column comments via a standalone COMMENT ON COLUMN statement", () => {
     expect(
       dialect.columnDDL({ name: "email", type: "varchar(320)", nullable: false }),

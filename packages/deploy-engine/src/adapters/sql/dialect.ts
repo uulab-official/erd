@@ -147,7 +147,8 @@ export function createSqlDialect(options: SqlDialectOptions): SqlDialect {
     const type =
       column.autoIncrement && autoIncrementType ? autoIncrementType(column.type) : column.type;
     const suffix = column.autoIncrement && autoIncrementSuffix ? autoIncrementSuffix : "";
-    return `${quoteIdentifier(column.name)} ${type}${column.nullable ? "" : " NOT NULL"}${formatDefault(column.default)}${suffix}${checkClause}${commentSuffix}`;
+    const uniqueClause = column.unique ? " UNIQUE" : "";
+    return `${quoteIdentifier(column.name)} ${type}${column.nullable ? "" : " NOT NULL"}${formatDefault(column.default)}${suffix}${uniqueClause}${checkClause}${commentSuffix}`;
   };
 
   const inlineForeignKeyDDL = (fk: SqlForeignKeyDef): string =>

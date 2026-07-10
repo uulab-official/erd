@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createPostgresDialect } from "./dialect.js";
 import { createMySqlDialect } from "./mysql.js";
 import { planSqlDeployment, rollbackSqlPlan } from "./plan.js";
-import { customerEntity, shopModel } from "./test-fixtures.js";
+import { customerEntity, orderEntity, shopModel } from "./test-fixtures.js";
 import type { Model } from "@modelforge/schema-engine";
 
 const dialect = createPostgresDialect();
@@ -193,6 +193,31 @@ describe("planSqlDeployment", () => {
     const plan = planSqlDeployment(current, deployed, dialect);
     const emailStep = plan.steps.find((s) => s.target === "customer.email");
     expect(emailStep?.warning).not.toMatch(/comment/i);
+  });
+
+  it("warns when a non-PK column's UNIQUE constraint is toggled, since the ALTER statement can't express it", () => {
+    const deployed: Model = {
+      id: "shop",
+      name: "Shop",
+      adapter: "postgresql",
+      entities: [
+        {
+          ...customerEntity(),
+          attributes: customerEntity().attributes.map((a) =>
+            a.name === "email" ? { ...a, isUnique: false } : a,
+          ),
+        },
+        orderEntity(),
+      ],
+      relationships: [],
+      views: [],
+      sequences: [],
+      enums: [],
+    };
+    const current: Model = { ...deployed, entities: [customerEntity(), orderEntity()] };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const emailStep = plan.steps.find((s) => s.target === "customer.email");
+    expect(emailStep?.warning).toMatch(/UNIQUE constraint.*isn't captured/i);
   });
 
   it("plans create-sequence/create-view when a Sequence/View is added", () => {

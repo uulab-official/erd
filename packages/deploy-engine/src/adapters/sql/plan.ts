@@ -175,6 +175,15 @@ export function planSqlDeployment(
             "Changing this column's comment isn't captured by this statement — apply it manually.",
           );
         }
+        // Adding/removing a UNIQUE constraint on an existing column is a constraint
+        // change (ADD CONSTRAINT ... UNIQUE / DROP CONSTRAINT), not a type change — the
+        // generic ALTER COLUMN ... TYPE statement can't express it either. Same
+        // "don't guess, warn" policy as the three cases above.
+        if (Boolean(existing.unique) !== Boolean(column.unique)) {
+          warnings.push(
+            "Toggling this column's UNIQUE constraint isn't captured by this statement — apply it manually.",
+          );
+        }
         steps.push({
           action: "alter-attribute",
           target: `${table.name}.${column.name}`,
