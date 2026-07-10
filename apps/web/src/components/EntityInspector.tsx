@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ColumnType } from "@modelforge/schema-engine";
+import type { ColumnType, Index } from "@modelforge/schema-engine";
 import { Button, Input, Select } from "@modelforge/ui";
 import { useEditorStore } from "../store/useEditorStore.js";
 import { useSelectionStore } from "../store/useSelectionStore.js";
@@ -15,6 +15,9 @@ const COLUMN_TYPES: ColumnType[] = [
   "enum",
   "uuid",
 ];
+
+type IndexType = NonNullable<Index["type"]>;
+const INDEX_TYPES: IndexType[] = ["btree", "hash", "gin", "gist", "fulltext"];
 
 function toPhysicalName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, "_") || "attribute";
@@ -42,6 +45,7 @@ export function EntityInspector() {
   const [newIndexName, setNewIndexName] = useState("");
   const [newIndexAttributeIds, setNewIndexAttributeIds] = useState<string[]>([]);
   const [newIndexUnique, setNewIndexUnique] = useState(false);
+  const [newIndexType, setNewIndexType] = useState<IndexType | "">("");
 
   const entity = model.entities.find((e) => e.id === selectedEntityId);
   if (!entity) return null;
@@ -81,10 +85,12 @@ export function EntityInspector() {
       name,
       attributeIds: newIndexAttributeIds,
       unique: newIndexUnique,
+      ...(newIndexType ? { type: newIndexType } : {}),
     });
     setNewIndexName("");
     setNewIndexAttributeIds([]);
     setNewIndexUnique(false);
+    setNewIndexType("");
   }
 
   function handleDeleteEntity() {
@@ -275,6 +281,7 @@ export function EntityInspector() {
                     .map((id) => entity.attributes.find((a) => a.id === id)?.name ?? id)
                     .join(", ")}
                   {index.unique ? " · unique" : ""}
+                  {index.type ? ` · ${index.type}` : ""}
                 </span>
               </div>
               <button
@@ -314,6 +321,17 @@ export function EntityInspector() {
             />
             Unique
           </label>
+          <Select
+            value={newIndexType}
+            onChange={(e) => setNewIndexType(e.target.value as IndexType | "")}
+          >
+            <option value="">Default index type</option>
+            {INDEX_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </Select>
           <Button
             variant="secondary"
             size="sm"

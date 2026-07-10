@@ -129,6 +129,30 @@ describe("createPostgresDialect", () => {
     ).not.toContain("UNIQUE");
   });
 
+  it("renders a USING clause for an index with a method, omitted for fulltext", () => {
+    expect(
+      dialect.createIndexDDL({ name: "email_idx", unique: false, columns: ["email"] }, "customer"),
+    ).toBe('CREATE INDEX "email_idx" ON "customer" ("email");');
+    expect(
+      dialect.createIndexDDL(
+        { name: "email_idx", unique: false, columns: ["email"], method: "gin" },
+        "customer",
+      ),
+    ).toBe('CREATE INDEX "email_idx" ON "customer" USING gin ("email");');
+    expect(
+      dialect.createIndexDDL(
+        { name: "email_idx", unique: true, columns: ["email"], method: "btree" },
+        "customer",
+      ),
+    ).toBe('CREATE UNIQUE INDEX "email_idx" ON "customer" USING btree ("email");');
+    expect(
+      dialect.createIndexDDL(
+        { name: "email_idx", unique: false, columns: ["email"], method: "fulltext" },
+        "customer",
+      ),
+    ).toBe('CREATE INDEX "email_idx" ON "customer" ("email");');
+  });
+
   it("supports column comments via a standalone COMMENT ON COLUMN statement", () => {
     expect(
       dialect.columnDDL({ name: "email", type: "varchar(320)", nullable: false }),

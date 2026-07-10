@@ -114,6 +114,14 @@ export interface SqlDialectOptions {
   // any dialect that has it, so a boolean flag is enough — createSqlDialect builds the
   // generic columnCommentDDL implementation itself, the same shape as supportsSequences.
   supportsColumnComments?: boolean;
+  // Full override of the generic CREATE INDEX renderer below, used by dialects that
+  // support Index.type (PostgreSQL's "USING btree/hash/gin/gist" clause goes *before*
+  // the column list; MySQL's "USING BTREE/HASH" goes *after*, and its fulltext index is
+  // a different leading keyword entirely) — the placement differs enough per dialect
+  // that a single shared clause-insertion hook can't express both. A dialect that omits
+  // this (SQLite) falls back to the generic renderer, which silently ignores
+  // SqlIndexDef.method — SQLite has no index-method concept at all.
+  createIndexDDL?: SqlDialect["createIndexDDL"];
 }
 
 // Generic implementation of columnDDL/createTableDDL/createIndexDDL/foreignKeyDDL shared
@@ -131,6 +139,7 @@ export function createSqlDialect(options: SqlDialectOptions): SqlDialect {
     supportsSequences = false,
     columnCommentSuffix,
     supportsColumnComments = false,
+    createIndexDDL: createIndexDDLOverride,
   } = options;
 
   const columnDDL: SqlDialect["columnDDL"] = (column) => {
@@ -172,8 +181,10 @@ export function createSqlDialect(options: SqlDialectOptions): SqlDialect {
     return `CREATE TABLE ${quoteIdentifier(table.name)} (\n  ${lines.join(",\n  ")}\n);`;
   };
 
-  const createIndexDDL: SqlDialect["createIndexDDL"] = (index, tableName) =>
-    `CREATE ${index.unique ? "UNIQUE " : ""}INDEX ${quoteIdentifier(index.name)} ON ${quoteIdentifier(tableName)} (${index.columns.map(quoteIdentifier).join(", ")});`;
+  const createIndexDDL: SqlDialect["createIndexDDL"] =
+    createIndexDDLOverride ??
+    ((index, tableName) =>
+      `CREATE ${index.unique ? "UNIQUE " : ""}INDEX ${quoteIdentifier(index.name)} ON ${quoteIdentifier(tableName)} (${index.columns.map(quoteIdentifier).join(", ")});`);
 
   const foreignKeyDDL: SqlDialect["foreignKeyDDL"] = (fk, ownerTableName) =>
     supportsAlterForeignKey
@@ -286,5 +297,14 @@ export function createPostgresDialect(): SqlDialect {
     autoIncrementType: (mappedType) => (mappedType === "bigint" ? "bigserial" : "serial"),
     supportsSequences: true,
     supportsColumnComments: true,
+    // PostgreSQL supports btree (its default access method)/hash/gin/gist via
+    // "USING <method>" right after the table name — "fulltext" isn't a PostgreSQL index
+    // method (full-text search there is GIN over a tsvector expression, which isn't
+    // representable from a plain column list), so it's ignored like an unset method.
+    createIndexDDL: (index, tableName) => {
+      const usingClause =
+        index.method && index.method !== "fulltext" ? ` USING ${index.method}` : "";
+      return `CREATE ${index.unique ? "UNIQUE " : ""}INDEX ${quoteIdentifier(index.name)} ON ${quoteIdentifier(tableName)}${usingClause} (${index.columns.map(quoteIdentifier).join(", ")});`;
+    },
   });
 }

@@ -45,6 +45,20 @@ describe("toNativeSchema (SQL)", () => {
     expect(customer?.indexes).toEqual([{ name: "email_idx", unique: true, columns: ["email"] }]);
   });
 
+  it("carries Index.type through to SqlIndexDef.method", () => {
+    const model = shopModel();
+    model.entities[0]!.indexes[0]!.type = "gin";
+    const schema = toNativeSchema(model, dialect);
+    const customer = schema.tables.find((t) => t.name === "customer");
+    expect(customer?.indexes.find((i) => i.name === "email_idx")?.method).toBe("gin");
+  });
+
+  it("omits method from SqlIndexDef when the Index has none", () => {
+    const schema = toNativeSchema(shopModel(), dialect);
+    const customer = schema.tables.find((t) => t.name === "customer");
+    expect(customer?.indexes.find((i) => i.name === "email_idx")?.method).toBeUndefined();
+  });
+
   it("builds a foreign key on the target ('many') side referencing the source", () => {
     const schema = toNativeSchema(shopModel(), dialect);
     const order = schema.tables.find((t) => t.name === "purchase_order");

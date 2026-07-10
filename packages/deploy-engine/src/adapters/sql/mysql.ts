@@ -69,5 +69,20 @@ export function createMySqlDialect(): SqlDialect {
     // MySQL has no standalone COMMENT ON COLUMN — the comment is part of the column
     // definition itself.
     columnCommentSuffix: (comment) => ` COMMENT '${comment.replace(/'/g, "''")}'`,
+    // MySQL supports btree/hash via "USING BTREE/HASH" *after* the column list (unlike
+    // PostgreSQL, which puts it before). Fulltext is a wholly different statement —
+    // "CREATE FULLTEXT INDEX" — not a UNIQUE-compatible USING clause, so a fulltext
+    // index can't also be unique. gin/gist aren't MySQL index methods, so they're
+    // ignored like an unset method.
+    createIndexDDL: (index, tableName) => {
+      if (index.method === "fulltext") {
+        return `CREATE FULLTEXT INDEX ${quoteIdentifier(index.name)} ON ${quoteIdentifier(tableName)} (${index.columns.map(quoteIdentifier).join(", ")});`;
+      }
+      const usingClause =
+        index.method === "btree" || index.method === "hash"
+          ? ` USING ${index.method.toUpperCase()}`
+          : "";
+      return `CREATE ${index.unique ? "UNIQUE " : ""}INDEX ${quoteIdentifier(index.name)} ON ${quoteIdentifier(tableName)} (${index.columns.map(quoteIdentifier).join(", ")})${usingClause};`;
+    },
   });
 }

@@ -33,6 +33,11 @@ export interface SqlIndexDef {
   name: string;
   unique: boolean;
   columns: string[];
+  // Index.type carried through unchanged — rendered as a dialect-specific "USING"
+  // clause (or, for MySQL's fulltext, a different leading keyword) by
+  // SqlDialect.createIndexDDL. A dialect with no index-method support (SQLite) simply
+  // ignores this, the same silent-omission as SqlColumnDef.comment there.
+  method?: "btree" | "hash" | "gin" | "gist" | "fulltext";
 }
 
 export interface SqlForeignKeyDef {

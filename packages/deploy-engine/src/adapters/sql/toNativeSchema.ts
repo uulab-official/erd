@@ -51,6 +51,7 @@ function toTable(entity: Entity, model: Model, dialect: SqlDialect): SqlTableDef
     columns: index.attributeIds
       .map((id) => entity.attributes.find((a) => a.id === id)?.name)
       .filter((name): name is string => Boolean(name)),
+    ...(index.type ? { method: index.type } : {}),
   }));
 
   // The FK columns live on the "many" side (targetEntityId), referencing the "one" side

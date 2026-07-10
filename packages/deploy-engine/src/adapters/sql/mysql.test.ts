@@ -62,6 +62,28 @@ describe("createMySqlDialect", () => {
     ).toBe("`id` int NOT NULL AUTO_INCREMENT");
   });
 
+  it("renders USING BTREE/HASH after the column list, and a separate FULLTEXT INDEX statement", () => {
+    expect(
+      dialect.createIndexDDL(
+        { name: "email_idx", unique: false, columns: ["email"], method: "hash" },
+        "customer",
+      ),
+    ).toBe("CREATE INDEX `email_idx` ON `customer` (`email`) USING HASH;");
+    expect(
+      dialect.createIndexDDL(
+        { name: "email_idx", unique: false, columns: ["email"], method: "fulltext" },
+        "customer",
+      ),
+    ).toBe("CREATE FULLTEXT INDEX `email_idx` ON `customer` (`email`);");
+    // gin/gist aren't MySQL index methods — ignored like an unset method.
+    expect(
+      dialect.createIndexDDL(
+        { name: "email_idx", unique: false, columns: ["email"], method: "gin" },
+        "customer",
+      ),
+    ).toBe("CREATE INDEX `email_idx` ON `customer` (`email`);");
+  });
+
   it("bakes the column comment inline (no standalone COMMENT ON COLUMN)", () => {
     expect(
       dialect.columnDDL({
