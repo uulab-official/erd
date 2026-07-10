@@ -165,6 +165,68 @@ describe("renderPrismaSchema", () => {
     const schema = renderPrismaSchema(model);
     expect(schema).not.toContain("autoincrement()");
   });
+
+  it("renders a multi-column non-unique Index as @@index with its name as map", () => {
+    const entity: Entity = {
+      ...orderEntity(),
+      indexes: [
+        {
+          id: "idx1",
+          name: "idx_order_customer_created",
+          attributeIds: ["order_customer_id", "order_id"],
+          unique: false,
+        },
+      ],
+    };
+    const model: Model = { ...baseModel([]), entities: [customerEntity(), entity] };
+    const schema = renderPrismaSchema(model);
+    expect(schema).toContain('@@index([customerId, order_id], map: "idx_order_customer_created")');
+  });
+
+  it("renders a multi-column unique Index as @@unique", () => {
+    const entity: Entity = {
+      ...orderEntity(),
+      indexes: [
+        {
+          id: "idx1",
+          name: "uq_order_customer",
+          attributeIds: ["order_customer_id", "order_id"],
+          unique: true,
+        },
+      ],
+    };
+    const model: Model = { ...baseModel([]), entities: [customerEntity(), entity] };
+    const schema = renderPrismaSchema(model);
+    expect(schema).toContain('@@unique([customerId, order_id], map: "uq_order_customer")');
+  });
+
+  it("skips a single-column unique Index that only duplicates the attribute's own @unique", () => {
+    const entity: Entity = {
+      ...customerEntity(),
+      indexes: [
+        {
+          id: "idx1",
+          name: "email_idx",
+          attributeIds: ["customer_email"],
+          unique: true,
+        },
+      ],
+    };
+    const model: Model = { ...baseModel([]), entities: [entity] };
+    const schema = renderPrismaSchema(model);
+    expect(schema).not.toContain("@@unique");
+  });
+
+  it("skips an Index referencing an attribute id that no longer exists", () => {
+    const entity: Entity = {
+      ...orderEntity(),
+      indexes: [{ id: "idx1", name: "dangling", attributeIds: ["missing"], unique: false }],
+    };
+    const model: Model = { ...baseModel([]), entities: [customerEntity(), entity] };
+    const schema = renderPrismaSchema(model);
+    expect(schema).not.toContain("@@index");
+    expect(schema).not.toContain("dangling");
+  });
 });
 
 describe("renderPrismaSchema with a real Enum", () => {

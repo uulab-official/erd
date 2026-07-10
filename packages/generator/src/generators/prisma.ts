@@ -124,6 +124,29 @@ function renderField(model: Model, entity: Entity, attr: Attribute): string {
   return `  ${attr.name} ${type}${modifiers.length ? ` ${modifiers.join(" ")}` : ""}`;
 }
 
+// Entity.indexes -> @@index/@@unique block attributes. A single-column unique Index
+// that just duplicates the attribute's own @id/@unique (already rendered by
+// renderField from isPrimaryKey/isUnique) would be a redundant constraint Prisma
+// rejects as a duplicate — skipped, mirroring toNativeSchema.ts's identical
+// "isUnique && !isPrimaryKey" guard in the SQL adapter.
+function renderIndexBlocks(entity: Entity): string[] {
+  return entity.indexes
+    .map((index) => {
+      const columns = index.attributeIds
+        .map((id) => entity.attributes.find((a) => a.id === id)?.name)
+        .filter((name): name is string => Boolean(name));
+      if (columns.length === 0) return undefined;
+      if (index.unique && columns.length === 1) {
+        const attr = entity.attributes.find((a) => a.name === columns[0]);
+        if (attr?.isPrimaryKey || attr?.isUnique) return undefined;
+      }
+      const directive = index.unique ? "@@unique" : "@@index";
+      const mapName = index.name.replace(/"/g, '\\"');
+      return `  ${directive}([${columns.join(", ")}], map: "${mapName}")`;
+    })
+    .filter((line): line is string => Boolean(line));
+}
+
 // Relations between the same two models need a name (Prisma's @relation("name", ...))
 // only when there's more than one — otherwise it's inferred and a name would be noise.
 function buildRelationNamer(model: Model): (rel: Relationship) => string | undefined {
@@ -193,6 +216,8 @@ function renderModel(
     const fieldName = pluralize(lowerFirst(other?.logicalName ?? otherId));
     lines.push(`  ${fieldName} ${pascalCase(other?.logicalName ?? otherId)}[]`);
   }
+
+  lines.push(...renderIndexBlocks(entity));
 
   lines.push("}");
   return lines.join("\n");
