@@ -25,6 +25,14 @@ export function VersionsPanel() {
   const [compareId, setCompareId] = useState<string | null>(null);
   const [compareSnapshot, setCompareSnapshot] = useState<Model | null>(null);
   const [compareError, setCompareError] = useState<string | null>(null);
+  // saveVersion/restoreVersion/deleteVersion previously had no error handling anywhere
+  // (store or component) — a rejection (network drop, permission error) was an unhandled
+  // promise rejection with zero on-screen indication, the same silent-failure shape as
+  // save()/load() on the main Model (see App.tsx/useEditorStore.ts) but for the Versions
+  // tab's actions instead. Local state here mirrors the existing compareError pattern
+  // rather than adding these to the global store, since they're specific to this panel's
+  // own actions rather than the whole-editor save/load lifecycle.
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     void refreshVersions();
@@ -33,9 +41,12 @@ export function VersionsPanel() {
   async function handleSave() {
     if (!label.trim()) return;
     setSaving(true);
+    setActionError(null);
     try {
       await saveVersion(label.trim());
       setLabel("");
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
     } finally {
       setSaving(false);
     }
@@ -66,16 +77,26 @@ export function VersionsPanel() {
     ) {
       return;
     }
-    await restoreVersion(versionId);
+    setActionError(null);
+    try {
+      await restoreVersion(versionId);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    }
   }
 
   async function handleDelete(versionId: string, label: string) {
     if (!window.confirm(`Delete version "${label}"? This cannot be undone.`)) return;
-    if (compareId === versionId) {
-      setCompareId(null);
-      setCompareSnapshot(null);
+    setActionError(null);
+    try {
+      await deleteVersion(versionId);
+      if (compareId === versionId) {
+        setCompareId(null);
+        setCompareSnapshot(null);
+      }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
     }
-    await deleteVersion(versionId);
   }
 
   const compareDiff = compareSnapshot ? diffModels(compareSnapshot, model) : null;
@@ -129,6 +150,12 @@ export function VersionsPanel() {
           {saving ? "Saving…" : "Save Version"}
         </Button>
       </div>
+
+      {actionError && (
+        <p className="text-sm text-red-600" role="alert">
+          {actionError}
+        </p>
+      )}
 
       {versionsLoading && <p className="text-sm text-slate-400">Loading…</p>}
       {!versionsLoading && versions.length === 0 && (
