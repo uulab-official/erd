@@ -108,6 +108,12 @@ interface EditorState {
   // via describeHistoryEntry() at the time each entry is pushed/popped.
   historyLog: string[];
   saving: boolean;
+  // Set when save() rejects (network drop, permission error, Appwrite outage) so the UI
+  // can show it — without this, a failed save silently reverted the button from
+  // "Saving…" back to "Save" with no indication anything went wrong, and a user who
+  // didn't notice could believe unsaved work was safe when it wasn't. Cleared at the
+  // start of every save() attempt.
+  saveError: string | null;
   loading: boolean;
   addEntity(logicalName: string): void;
   removeEntity(entityId: string): void;
@@ -246,6 +252,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   canRedo: false,
   historyLog: [],
   saving: false,
+  saveError: null,
   loading: false,
   versions: [],
   versionsLoading: false,
@@ -453,11 +460,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   async save() {
-    set({ saving: true });
+    set({ saving: true, saveError: null });
     try {
       const model = get().model;
       await getModelStore().save(model);
       set({ savedModel: model });
+    } catch (error) {
+      set({ saveError: error instanceof Error ? error.message : String(error) });
     } finally {
       set({ saving: false });
     }

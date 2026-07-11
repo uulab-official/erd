@@ -26,6 +26,7 @@ export function Toolbar() {
     canUndo,
     canRedo,
     saving,
+    saveError,
     addEntity,
     undo,
     redo,
@@ -238,6 +239,11 @@ export function Toolbar() {
         <Button variant="primary" size="sm" onClick={() => void save()} disabled={saving}>
           {saving ? "Saving…" : "Save"}
         </Button>
+        {saveError && (
+          <span className="text-sm text-red-600" role="alert">
+            Save failed: {saveError}
+          </span>
+        )}
         {user && (
           <>
             <Divider />
