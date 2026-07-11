@@ -6,6 +6,11 @@ const createRelationshipAttribute = vi.fn().mockResolvedValue({});
 const createIndex = vi.fn().mockResolvedValue({});
 const deleteCollection = vi.fn().mockResolvedValue({});
 const deleteAttribute = vi.fn().mockResolvedValue({});
+// Every attribute/index is "available" the instant it's queried, so
+// waitForAttributeAvailable/waitForIndexAvailable (adminApi.ts) resolve immediately
+// instead of actually polling — these tests care about step ordering, not that wait.
+const getAttribute = vi.fn().mockResolvedValue({ status: "available" });
+const getIndex = vi.fn().mockResolvedValue({ status: "available" });
 
 class FakeDatabases {
   createCollection = createCollection;
@@ -14,6 +19,8 @@ class FakeDatabases {
   createIndex = createIndex;
   deleteCollection = deleteCollection;
   deleteAttribute = deleteAttribute;
+  getAttribute = getAttribute;
+  getIndex = getIndex;
 }
 
 vi.mock("node-appwrite", () => ({
@@ -26,6 +33,18 @@ vi.mock("node-appwrite", () => ({
   },
   RelationMutate: { Cascade: "cascade", Restrict: "restrict", SetNull: "setNull" },
   DatabasesIndexType: { Key: "key", Unique: "unique", Fulltext: "fulltext" },
+  AttributeStatus: {
+    Available: "available",
+    Processing: "processing",
+    Failed: "failed",
+    Stuck: "stuck",
+  },
+  IndexStatus: {
+    Available: "available",
+    Processing: "processing",
+    Failed: "failed",
+    Stuck: "stuck",
+  },
 }));
 
 const { applyPlan } = await import("./applyPlan.js");

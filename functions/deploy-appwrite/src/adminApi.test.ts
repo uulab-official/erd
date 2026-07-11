@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createCollection = vi.fn().mockResolvedValue({});
 const createStringAttribute = vi.fn().mockResolvedValue({});
@@ -14,6 +14,8 @@ const deleteAttribute = vi.fn().mockResolvedValue({});
 const createIndex = vi.fn().mockResolvedValue({});
 const deleteIndex = vi.fn().mockResolvedValue({});
 const deleteCollection = vi.fn().mockResolvedValue({});
+const getAttribute = vi.fn().mockResolvedValue({ status: "available" });
+const getIndex = vi.fn().mockResolvedValue({ status: "available" });
 
 class FakeDatabases {
   createCollection = createCollection;
@@ -30,6 +32,8 @@ class FakeDatabases {
   createIndex = createIndex;
   deleteIndex = deleteIndex;
   deleteCollection = deleteCollection;
+  getAttribute = getAttribute;
+  getIndex = getIndex;
 }
 
 vi.mock("node-appwrite", () => ({
@@ -42,6 +46,18 @@ vi.mock("node-appwrite", () => ({
   },
   RelationMutate: { Cascade: "cascade", Restrict: "restrict", SetNull: "setNull" },
   DatabasesIndexType: { Key: "key", Unique: "unique", Fulltext: "fulltext" },
+  AttributeStatus: {
+    Available: "available",
+    Processing: "processing",
+    Failed: "failed",
+    Stuck: "stuck",
+  },
+  IndexStatus: {
+    Available: "available",
+    Processing: "processing",
+    Failed: "failed",
+    Stuck: "stuck",
+  },
 }));
 
 const { createAdminApi } = await import("./adminApi.js");
@@ -154,5 +170,77 @@ describe("createAdminApi", () => {
 
     await api.deleteCollection("customer");
     expect(deleteCollection).toHaveBeenCalledWith({ databaseId: "db-1", collectionId: "customer" });
+  });
+});
+
+describe("createAdminApi — waiting for Appwrite's async attribute/index processing", () => {
+  const fastApi = createAdminApi({} as never, "db-1", { pollIntervalMs: 1, timeoutMs: 20 });
+
+  beforeEach(() => {
+    getAttribute.mockReset().mockResolvedValue({ status: "available" });
+    getIndex.mockReset().mockResolvedValue({ status: "available" });
+  });
+
+  it("createPlainAttribute polls getAttribute until it reports available", async () => {
+    getAttribute
+      .mockResolvedValueOnce({ status: "processing" })
+      .mockResolvedValueOnce({ status: "available" });
+
+    await fastApi.createPlainAttribute("customer", {
+      key: "email",
+      type: "string",
+      required: true,
+      array: false,
+      size: 320,
+    });
+
+    expect(getAttribute).toHaveBeenCalledTimes(2);
+    expect(getAttribute).toHaveBeenLastCalledWith({
+      databaseId: "db-1",
+      collectionId: "customer",
+      key: "email",
+    });
+  });
+
+  it("createIndex polls getIndex until it reports available", async () => {
+    getIndex
+      .mockResolvedValueOnce({ status: "processing" })
+      .mockResolvedValueOnce({ status: "available" });
+
+    await fastApi.createIndex("customer", {
+      key: "email_idx",
+      type: "unique",
+      attributes: ["email"],
+    });
+
+    expect(getIndex).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects when an attribute lands in a failed/stuck status instead of available", async () => {
+    getAttribute.mockResolvedValueOnce({ status: "stuck" });
+
+    await expect(
+      fastApi.createPlainAttribute("customer", {
+        key: "email",
+        type: "string",
+        required: true,
+        array: false,
+        size: 320,
+      }),
+    ).rejects.toThrow(/failed to become available/i);
+  });
+
+  it("rejects after timing out if an attribute never becomes available", async () => {
+    getAttribute.mockResolvedValue({ status: "processing" });
+
+    await expect(
+      fastApi.createPlainAttribute("customer", {
+        key: "email",
+        type: "string",
+        required: true,
+        array: false,
+        size: 320,
+      }),
+    ).rejects.toThrow(/timed out/i);
   });
 });

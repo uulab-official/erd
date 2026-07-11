@@ -36,6 +36,23 @@ Both actions share the same Databases-scoped API key rather than living in two F
 of, so splitting them wouldn't reduce the privilege surface, only double the deployment
 boilerplate.
 
+### Attribute/index creation is asynchronous — this Function waits for it
+
+Appwrite processes `createXAttribute`/`createIndex` calls asynchronously: right after the
+call resolves, the attribute/index is still `processing` and only becomes `available`
+some time later. Creating an index over an attribute (or a relationship attribute
+pointing at a related collection's attribute) before that transition completes fails with
+an "attribute not available"-style error — a real, commonly-hit Appwrite integration
+gotcha, not a hypothetical. `src/adminApi.ts`'s `waitForAttributeAvailable`/
+`waitForIndexAvailable` poll `getAttribute`/`getIndex` (every 500ms, 30s timeout per
+object by default) after every create/alter call, so `applyPlan.ts`'s strictly sequential
+step execution never races ahead of Appwrite's own processing.
+
+This does mean a plan with many attributes/indexes can spend real wall-clock time
+polling — factor that into the Function's `timeout` setting (60s below) for large plans;
+a single stuck attribute waits up to 30s before failing that step (and the whole plan,
+since `applyPlan` stops at the first failure).
+
 ## Deploying this Function
 
 You need the [Appwrite CLI](https://appwrite.io/docs/tooling/command-line) installed and

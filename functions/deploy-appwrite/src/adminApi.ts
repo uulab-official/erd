@@ -1,4 +1,11 @@
-import { Databases, DatabasesIndexType, RelationMutate, RelationshipType } from "node-appwrite";
+import {
+  AttributeStatus,
+  Databases,
+  DatabasesIndexType,
+  IndexStatus,
+  RelationMutate,
+  RelationshipType,
+} from "node-appwrite";
 import type { Client } from "node-appwrite";
 import type {
   AppwriteAnyAttributeDef,
@@ -45,6 +52,81 @@ function mapIndexType(type: AppwriteIndexDef["type"]): DatabasesIndexType {
   }
 }
 
+const DEFAULT_POLL_INTERVAL_MS = 500;
+const DEFAULT_POLL_TIMEOUT_MS = 30_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export interface PollOptions {
+  pollIntervalMs?: number;
+  timeoutMs?: number;
+}
+
+// Appwrite creates/alters attributes and indexes asynchronously — right after the
+// createXAttribute/createIndex call resolves, the object is still in "processing" status
+// and only becomes "available" some time later. A step that depends on it (an index over
+// an attribute just created, a relationship attribute pointing at a related collection's
+// attribute, or simply the *next* step in this same deploy plan) can fail with an
+// "Attribute not available"-style error if it runs first. Polling here — rather than at
+// each call site — means every AdminApi method's returned Promise only resolves once
+// what it created/altered is actually usable, so applyPlan.ts's strictly sequential
+// phase-by-phase execution (see its comment) is safe without knowing about this at all.
+async function waitForAttributeAvailable(
+  databases: Databases,
+  databaseId: string,
+  collectionId: string,
+  key: string,
+  {
+    pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
+    timeoutMs = DEFAULT_POLL_TIMEOUT_MS,
+  }: PollOptions = {},
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const attr = await databases.getAttribute({ databaseId, collectionId, key });
+    if (attr.status === AttributeStatus.Available) return;
+    if (attr.status === AttributeStatus.Failed || attr.status === AttributeStatus.Stuck) {
+      throw new Error(
+        `Attribute "${collectionId}.${key}" failed to become available (status: ${attr.status}).`,
+      );
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Timed out waiting for attribute "${collectionId}.${key}" to become available.`,
+      );
+    }
+    await sleep(pollIntervalMs);
+  }
+}
+
+async function waitForIndexAvailable(
+  databases: Databases,
+  databaseId: string,
+  collectionId: string,
+  key: string,
+  {
+    pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
+    timeoutMs = DEFAULT_POLL_TIMEOUT_MS,
+  }: PollOptions = {},
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const index = await databases.getIndex({ databaseId, collectionId, key });
+    if (index.status === IndexStatus.Available) return;
+    if (index.status === IndexStatus.Failed || index.status === IndexStatus.Stuck) {
+      throw new Error(
+        `Index "${collectionId}.${key}" failed to become available (status: ${index.status}).`,
+      );
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(`Timed out waiting for index "${collectionId}.${key}" to become available.`);
+    }
+    await sleep(pollIntervalMs);
+  }
+}
+
 // Every primitive Appwrite Databases call this Function can make, one per concept in
 // AppwriteNativeSchema (packages/deploy-engine/src/adapters/appwrite/types.ts). main.ts
 // sequences these calls so a relationship's related collection always exists first —
@@ -74,7 +156,11 @@ export function createAttributeOrRelationship(
     : api.createPlainAttribute(collectionId, attr);
 }
 
-export function createAdminApi(client: Client, databaseId: string): AdminApi {
+export function createAdminApi(
+  client: Client,
+  databaseId: string,
+  pollOptions: PollOptions = {},
+): AdminApi {
   const databases = new Databases(client);
 
   return {
@@ -99,7 +185,7 @@ export function createAdminApi(client: Client, databaseId: string): AdminApi {
             xdefault: typeof xdefault === "string" ? xdefault : undefined,
             array: attr.array,
           });
-          return;
+          break;
         case "integer":
           await databases.createIntegerAttribute({
             databaseId,
@@ -109,7 +195,7 @@ export function createAdminApi(client: Client, databaseId: string): AdminApi {
             xdefault: typeof xdefault === "number" ? xdefault : undefined,
             array: attr.array,
           });
-          return;
+          break;
         case "float":
           await databases.createFloatAttribute({
             databaseId,
@@ -119,7 +205,7 @@ export function createAdminApi(client: Client, databaseId: string): AdminApi {
             xdefault: typeof xdefault === "number" ? xdefault : undefined,
             array: attr.array,
           });
-          return;
+          break;
         case "boolean":
           await databases.createBooleanAttribute({
             databaseId,
@@ -129,7 +215,7 @@ export function createAdminApi(client: Client, databaseId: string): AdminApi {
             xdefault: typeof xdefault === "boolean" ? xdefault : undefined,
             array: attr.array,
           });
-          return;
+          break;
         case "datetime":
           await databases.createDatetimeAttribute({
             databaseId,
@@ -139,7 +225,7 @@ export function createAdminApi(client: Client, databaseId: string): AdminApi {
             xdefault: typeof xdefault === "string" ? xdefault : undefined,
             array: attr.array,
           });
-          return;
+          break;
         case "enum":
           await databases.createEnumAttribute({
             databaseId,
@@ -150,8 +236,9 @@ export function createAdminApi(client: Client, databaseId: string): AdminApi {
             xdefault: typeof xdefault === "string" ? xdefault : undefined,
             array: attr.array,
           });
-          return;
+          break;
       }
+      await waitForAttributeAvailable(databases, databaseId, collectionId, attr.key, pollOptions);
     },
 
     async createRelationshipAttribute(collectionId, attr) {
@@ -164,6 +251,7 @@ export function createAdminApi(client: Client, databaseId: string): AdminApi {
         key: attr.key,
         onDelete: mapOnDelete(attr.onDelete),
       });
+      await waitForAttributeAvailable(databases, databaseId, collectionId, attr.key, pollOptions);
     },
 
     async alterAttribute(collectionId, attr) {
@@ -174,6 +262,7 @@ export function createAdminApi(client: Client, databaseId: string): AdminApi {
           key: attr.key,
           onDelete: mapOnDelete(attr.onDelete),
         });
+        await waitForAttributeAvailable(databases, databaseId, collectionId, attr.key, pollOptions);
         return;
       }
       const xdefault = attr.default ?? undefined;
@@ -187,7 +276,7 @@ export function createAdminApi(client: Client, databaseId: string): AdminApi {
             xdefault: typeof xdefault === "string" ? xdefault : undefined,
             size: attr.size,
           });
-          return;
+          break;
         case "integer":
           await databases.updateIntegerAttribute({
             databaseId,
@@ -196,7 +285,7 @@ export function createAdminApi(client: Client, databaseId: string): AdminApi {
             required: attr.required,
             xdefault: typeof xdefault === "number" ? xdefault : undefined,
           });
-          return;
+          break;
         case "float":
           await databases.updateFloatAttribute({
             databaseId,
@@ -205,7 +294,7 @@ export function createAdminApi(client: Client, databaseId: string): AdminApi {
             required: attr.required,
             xdefault: typeof xdefault === "number" ? xdefault : undefined,
           });
-          return;
+          break;
         case "boolean":
           await databases.updateBooleanAttribute({
             databaseId,
@@ -214,7 +303,7 @@ export function createAdminApi(client: Client, databaseId: string): AdminApi {
             required: attr.required,
             xdefault: typeof xdefault === "boolean" ? xdefault : undefined,
           });
-          return;
+          break;
         case "datetime":
           await databases.updateDatetimeAttribute({
             databaseId,
@@ -223,7 +312,7 @@ export function createAdminApi(client: Client, databaseId: string): AdminApi {
             required: attr.required,
             xdefault: typeof xdefault === "string" ? xdefault : undefined,
           });
-          return;
+          break;
         case "enum":
           await databases.updateEnumAttribute({
             databaseId,
@@ -233,8 +322,9 @@ export function createAdminApi(client: Client, databaseId: string): AdminApi {
             required: attr.required,
             xdefault: typeof xdefault === "string" ? xdefault : undefined,
           });
-          return;
+          break;
       }
+      await waitForAttributeAvailable(databases, databaseId, collectionId, attr.key, pollOptions);
     },
 
     async deleteAttribute(collectionId, key) {
@@ -249,6 +339,7 @@ export function createAdminApi(client: Client, databaseId: string): AdminApi {
         type: mapIndexType(index.type),
         attributes: index.attributes,
       });
+      await waitForIndexAvailable(databases, databaseId, collectionId, index.key, pollOptions);
     },
 
     async deleteIndex(collectionId, key) {
