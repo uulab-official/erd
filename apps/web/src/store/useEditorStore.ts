@@ -115,6 +115,15 @@ interface EditorState {
   // start of every save() attempt.
   saveError: string | null;
   loading: boolean;
+  // Set when load() rejects, so the caller can avoid rendering the still-in-place
+  // `model` (which, on a fresh app load, is just an empty placeholder Model, not the
+  // real one requested) as if it had loaded successfully. Without this, a transient
+  // failure (dropped network, permission error) while opening an existing Model left
+  // the user staring at what looks like a legitimate empty canvas with no indication
+  // their real Model didn't load — and clicking Save from there would overwrite their
+  // actual saved data with that empty placeholder. Cleared at the start of every
+  // load() attempt.
+  loadError: string | null;
   addEntity(logicalName: string): void;
   removeEntity(entityId: string): void;
   // Persists a canvas drag's end position. A no-op when the position didn't actually
@@ -253,6 +262,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   historyLog: [],
   saving: false,
   saveError: null,
+  loadError: null,
   loading: false,
   versions: [],
   versionsLoading: false,
@@ -473,12 +483,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   async load(modelId) {
-    set({ loading: true });
+    set({ loading: true, loadError: null });
     try {
       const loaded = await getModelStore().load(modelId);
       const model = loaded ?? emptyModel(modelId, modelId);
       history = new OperationHistory();
       set({ model, savedModel: model, issues: validateModel(model), ...historyFlags() });
+    } catch (error) {
+      set({ loadError: error instanceof Error ? error.message : String(error) });
     } finally {
       set({ loading: false });
     }
