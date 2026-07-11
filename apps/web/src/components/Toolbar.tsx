@@ -20,6 +20,14 @@ export function Toolbar() {
   const [generating, setGenerating] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importingLive, setImportingLive] = useState(false);
+  // Export/Generate/Auto-layout previously had no error handling at all — a rejection
+  // (a generator throwing on unexpected model data, an auto-layout engine failing on a
+  // pathological graph, the browser's download API being blocked) went nowhere but the
+  // console, same silent-failure shape as the save()/load()/Version-panel gaps fixed
+  // earlier this pass. handleLayout in particular had no loading state to even revert,
+  // so a failure there previously looked like nothing happened at all.
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [layingOut, setLayingOut] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     model,
@@ -71,8 +79,11 @@ export function Toolbar() {
     const exporter = exporters.find((e) => e.id === exporterId);
     if (!exporter) return;
     setExporting(true);
+    setActionError(null);
     try {
       await downloadExport(exporter, model);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
     } finally {
       setExporting(false);
     }
@@ -82,8 +93,11 @@ export function Toolbar() {
     const generator = generators.find((g) => g.id === generatorId);
     if (!generator) return;
     setGenerating(true);
+    setActionError(null);
     try {
       await downloadGenerated(generator, model);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
     } finally {
       setGenerating(false);
     }
@@ -92,8 +106,16 @@ export function Toolbar() {
   async function handleLayout(engineId: string) {
     const engine = layoutEngines.find((l) => l.id === engineId);
     if (!engine) return;
-    const positions = await engine.layout(model);
-    applyLayout(positions, `Layout: ${engine.label}`);
+    setLayingOut(true);
+    setActionError(null);
+    try {
+      const positions = await engine.layout(model);
+      applyLayout(positions, `Layout: ${engine.label}`);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLayingOut(false);
+    }
   }
 
   async function handleImportFile(file: File | undefined) {
@@ -164,9 +186,13 @@ export function Toolbar() {
       </Button>
 
       <Divider />
-      <Select value="" onChange={(e) => e.target.value && void handleLayout(e.target.value)}>
+      <Select
+        disabled={layingOut}
+        value=""
+        onChange={(e) => e.target.value && void handleLayout(e.target.value)}
+      >
         <option value="" disabled>
-          Layout…
+          {layingOut ? "Laying out…" : "Layout…"}
         </option>
         {layoutEngines.map((engine) => (
           <option key={engine.id} value={engine.id}>
@@ -202,6 +228,11 @@ export function Toolbar() {
       {importError && (
         <span className="max-w-xs truncate text-sm text-red-600" title={importError}>
           {importError}
+        </span>
+      )}
+      {actionError && (
+        <span className="max-w-xs truncate text-sm text-red-600" title={actionError} role="alert">
+          {actionError}
         </span>
       )}
 
