@@ -36,7 +36,20 @@ export function BottomPanel() {
     diff.sequences.changed.length +
     diff.views.added.length +
     diff.views.removed.length +
-    diff.views.changed.length;
+    diff.views.changed.length +
+    diff.domains.added.length +
+    diff.domains.removed.length +
+    diff.domains.changed.length +
+    diff.dictionary.added.length +
+    diff.dictionary.removed.length +
+    diff.dictionary.changed.length +
+    diff.subjectAreas.added.length +
+    diff.subjectAreas.removed.length +
+    diff.subjectAreas.changed.length +
+    diff.memos.added.length +
+    diff.memos.removed.length +
+    diff.memos.changed.length +
+    (diff.namingRulesChanged ? 1 : 0);
 
   async function handleDeploy() {
     const destructiveCount = plan.steps.filter((s) => s.destructive).length;
@@ -174,6 +187,77 @@ export function BottomPanel() {
                 ~ view {model.views.find((v) => v.id === id)?.name ?? id} changed
               </li>
             ))}
+            {diff.domains.added.map((id) => (
+              <li key={`domain-added-${id}`} className="text-green-700">
+                + domain {(model.domains ?? []).find((d) => d.id === id)?.name ?? id} created
+              </li>
+            ))}
+            {diff.domains.removed.map((id) => (
+              <li key={`domain-removed-${id}`} className="text-red-600">
+                - domain {(savedModel.domains ?? []).find((d) => d.id === id)?.name ?? id} deleted
+              </li>
+            ))}
+            {diff.domains.changed.map((id) => (
+              <li key={`domain-changed-${id}`} className="text-amber-600">
+                ~ domain {(model.domains ?? []).find((d) => d.id === id)?.name ?? id} changed
+              </li>
+            ))}
+            {diff.dictionary.added.map((id) => (
+              <li key={`dict-added-${id}`} className="text-green-700">
+                + dictionary entry{" "}
+                {(model.dictionary ?? []).find((d) => d.id === id)?.logicalTerm ?? id} created
+              </li>
+            ))}
+            {diff.dictionary.removed.map((id) => (
+              <li key={`dict-removed-${id}`} className="text-red-600">
+                - dictionary entry{" "}
+                {(savedModel.dictionary ?? []).find((d) => d.id === id)?.logicalTerm ?? id} deleted
+              </li>
+            ))}
+            {diff.dictionary.changed.map((id) => (
+              <li key={`dict-changed-${id}`} className="text-amber-600">
+                ~ dictionary entry{" "}
+                {(model.dictionary ?? []).find((d) => d.id === id)?.logicalTerm ?? id} changed
+              </li>
+            ))}
+            {diff.subjectAreas.added.map((id) => (
+              <li key={`subject-area-added-${id}`} className="text-green-700">
+                + subject area {(model.subjectAreas ?? []).find((s) => s.id === id)?.name ?? id}{" "}
+                created
+              </li>
+            ))}
+            {diff.subjectAreas.removed.map((id) => (
+              <li key={`subject-area-removed-${id}`} className="text-red-600">
+                - subject area{" "}
+                {(savedModel.subjectAreas ?? []).find((s) => s.id === id)?.name ?? id} deleted
+              </li>
+            ))}
+            {diff.subjectAreas.changed.map((id) => (
+              <li key={`subject-area-changed-${id}`} className="text-amber-600">
+                ~ subject area {(model.subjectAreas ?? []).find((s) => s.id === id)?.name ?? id}{" "}
+                changed
+              </li>
+            ))}
+            {diff.memos.added.map((id) => (
+              <li key={`memo-added-${id}`} className="text-green-700">
+                + memo created
+              </li>
+            ))}
+            {diff.memos.removed.map((id) => (
+              <li key={`memo-removed-${id}`} className="text-red-600">
+                - memo deleted
+              </li>
+            ))}
+            {diff.memos.changed.map((id) => (
+              <li key={`memo-changed-${id}`} className="text-amber-600">
+                ~ memo changed
+              </li>
+            ))}
+            {diff.namingRulesChanged && (
+              <li key="naming-rules-changed" className="text-amber-600">
+                ~ naming rules changed
+              </li>
+            )}
           </ul>
         )}
 

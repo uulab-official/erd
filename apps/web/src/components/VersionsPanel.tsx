@@ -94,7 +94,20 @@ export function VersionsPanel() {
       compareDiff.sequences.changed.length +
       compareDiff.views.added.length +
       compareDiff.views.removed.length +
-      compareDiff.views.changed.length
+      compareDiff.views.changed.length +
+      compareDiff.domains.added.length +
+      compareDiff.domains.removed.length +
+      compareDiff.domains.changed.length +
+      compareDiff.dictionary.added.length +
+      compareDiff.dictionary.removed.length +
+      compareDiff.dictionary.changed.length +
+      compareDiff.subjectAreas.added.length +
+      compareDiff.subjectAreas.removed.length +
+      compareDiff.subjectAreas.changed.length +
+      compareDiff.memos.added.length +
+      compareDiff.memos.removed.length +
+      compareDiff.memos.changed.length +
+      (compareDiff.namingRulesChanged ? 1 : 0)
     : 0;
 
   return (
@@ -241,6 +254,86 @@ export function VersionsPanel() {
                         ~ view {model.views.find((v) => v.id === id)?.name ?? id} changed
                       </li>
                     ))}
+                    {compareDiff.domains.added.map((id) => (
+                      <li key={`domain-added-${id}`} className="text-green-700">
+                        + domain {(model.domains ?? []).find((d) => d.id === id)?.name ?? id}{" "}
+                        created
+                      </li>
+                    ))}
+                    {compareDiff.domains.removed.map((id) => (
+                      <li key={`domain-removed-${id}`} className="text-red-600">
+                        - domain{" "}
+                        {(compareSnapshot?.domains ?? []).find((d) => d.id === id)?.name ?? id}{" "}
+                        deleted
+                      </li>
+                    ))}
+                    {compareDiff.domains.changed.map((id) => (
+                      <li key={`domain-changed-${id}`} className="text-amber-600">
+                        ~ domain {(model.domains ?? []).find((d) => d.id === id)?.name ?? id}{" "}
+                        changed
+                      </li>
+                    ))}
+                    {compareDiff.dictionary.added.map((id) => (
+                      <li key={`dict-added-${id}`} className="text-green-700">
+                        + dictionary entry{" "}
+                        {(model.dictionary ?? []).find((d) => d.id === id)?.logicalTerm ?? id}{" "}
+                        created
+                      </li>
+                    ))}
+                    {compareDiff.dictionary.removed.map((id) => (
+                      <li key={`dict-removed-${id}`} className="text-red-600">
+                        - dictionary entry{" "}
+                        {(compareSnapshot?.dictionary ?? []).find((d) => d.id === id)
+                          ?.logicalTerm ?? id}{" "}
+                        deleted
+                      </li>
+                    ))}
+                    {compareDiff.dictionary.changed.map((id) => (
+                      <li key={`dict-changed-${id}`} className="text-amber-600">
+                        ~ dictionary entry{" "}
+                        {(model.dictionary ?? []).find((d) => d.id === id)?.logicalTerm ?? id}{" "}
+                        changed
+                      </li>
+                    ))}
+                    {compareDiff.subjectAreas.added.map((id) => (
+                      <li key={`subject-area-added-${id}`} className="text-green-700">
+                        + subject area{" "}
+                        {(model.subjectAreas ?? []).find((s) => s.id === id)?.name ?? id} created
+                      </li>
+                    ))}
+                    {compareDiff.subjectAreas.removed.map((id) => (
+                      <li key={`subject-area-removed-${id}`} className="text-red-600">
+                        - subject area{" "}
+                        {(compareSnapshot?.subjectAreas ?? []).find((s) => s.id === id)?.name ?? id}{" "}
+                        deleted
+                      </li>
+                    ))}
+                    {compareDiff.subjectAreas.changed.map((id) => (
+                      <li key={`subject-area-changed-${id}`} className="text-amber-600">
+                        ~ subject area{" "}
+                        {(model.subjectAreas ?? []).find((s) => s.id === id)?.name ?? id} changed
+                      </li>
+                    ))}
+                    {compareDiff.memos.added.map((id) => (
+                      <li key={`memo-added-${id}`} className="text-green-700">
+                        + memo created
+                      </li>
+                    ))}
+                    {compareDiff.memos.removed.map((id) => (
+                      <li key={`memo-removed-${id}`} className="text-red-600">
+                        - memo deleted
+                      </li>
+                    ))}
+                    {compareDiff.memos.changed.map((id) => (
+                      <li key={`memo-changed-${id}`} className="text-amber-600">
+                        ~ memo changed
+                      </li>
+                    ))}
+                    {compareDiff.namingRulesChanged && (
+                      <li key="naming-rules-changed" className="text-amber-600">
+                        ~ naming rules changed
+                      </li>
+                    )}
                   </ul>
                 )}
               </div>

@@ -25,6 +25,19 @@ export interface EntityDiff extends KeyedDiff {
   // above, just for the two Model fields added alongside their Operations/DDL support.
   sequences: KeyedDiff;
   views: KeyedDiff;
+  // Governance fields (Domain/DictionaryEntry/SubjectArea/Memo, all optional/Model.id-
+  // keyed arrays) had the exact same "invisible here" gap as enums/relationships/
+  // sequences/views above — a Domain rename or a Memo edit touches no Entity, so it
+  // silently vanished from both the Diff tab and the Version-compare view even though
+  // it's a real change. `?? []` treats a Model saved before these fields existed the
+  // same as one with them explicitly empty.
+  domains: KeyedDiff;
+  dictionary: KeyedDiff;
+  subjectAreas: KeyedDiff;
+  memos: KeyedDiff;
+  // NamingRuleSet is a single object, not an id-keyed array — no meaningful "added"/
+  // "removed"/"changed" list, just whether it changed at all.
+  namingRulesChanged: boolean;
 }
 
 function diffByKey<T>(itemsA: T[], itemsB: T[], keyOf: (item: T) => string): KeyedDiff {
@@ -70,5 +83,11 @@ export function diffModels(a: Model, b: Model): EntityDiff {
     relationships: diffByKey(a.relationships, b.relationships, (r) => r.id),
     sequences: diffByKey(a.sequences, b.sequences, (s) => s.id),
     views: diffByKey(a.views, b.views, (v) => v.id),
+    domains: diffByKey(a.domains ?? [], b.domains ?? [], (d) => d.id),
+    dictionary: diffByKey(a.dictionary ?? [], b.dictionary ?? [], (d) => d.id),
+    subjectAreas: diffByKey(a.subjectAreas ?? [], b.subjectAreas ?? [], (s) => s.id),
+    memos: diffByKey(a.memos ?? [], b.memos ?? [], (m) => m.id),
+    namingRulesChanged:
+      JSON.stringify(a.namingRules ?? null) !== JSON.stringify(b.namingRules ?? null),
   };
 }
