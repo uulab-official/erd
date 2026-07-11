@@ -11,6 +11,8 @@ export function App() {
   const { user, loading, checkSession } = useAuthStore();
   const openModelId = useNavigationStore((state) => state.openModelId);
   const load = useEditorStore((state) => state.load);
+  const model = useEditorStore((state) => state.model);
+  const savedModel = useEditorStore((state) => state.savedModel);
   // A page refresh restores openModelId from localStorage before the editor's model has
   // actually been fetched — load it once so Workspace doesn't render the still-empty
   // "default" model under the previously-open model's id.
@@ -26,6 +28,23 @@ export function App() {
       void load(openModelId);
     }
   }, [openModelId, load]);
+
+  // Every Operation returns a brand-new `model` object (see docs/operations.md — no
+  // Operation mutates in place), and save()/load()/restore() all set `savedModel` to
+  // that exact same reference, so `model !== savedModel` is a cheap, exact "has this
+  // model been edited since the last save?" check with no need to diff the two. Without
+  // this, closing the tab or reloading loses any in-progress edit with zero warning —
+  // the in-app "Back to models" button already confirms unconditionally, but that only
+  // covers in-app navigation, not the browser chrome closing/reloading the page.
+  useEffect(() => {
+    if (!openModelId || model === savedModel) return;
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [openModelId, model, savedModel]);
 
   if (isAppwriteConfigured && loading) {
     return (
