@@ -53,6 +53,29 @@ describe("deleteEntityCascade", () => {
     const { model, transaction } = deleteEntityCascade(before, "customer", "user-1");
     expect(undoTransaction(model, transaction)).toEqual(before);
   });
+
+  it("unassigns the entity from its Subject Area before deleting it", () => {
+    let before = createEntity(emptyModel(), customerEntity(), "user-1").model;
+    before = createSubjectArea(
+      before,
+      { subjectArea: { id: "sa1", name: "Core", entityIds: [] } },
+      "user-1",
+    ).model;
+    before = assignEntityToSubjectArea(
+      before,
+      { entityId: "customer", subjectAreaId: "sa1" },
+      "user-1",
+    ).model;
+
+    const { model, transaction } = deleteEntityCascade(before, "customer", "user-1");
+    expect(model.entities).toEqual([]);
+    expect(model.subjectAreas?.[0]?.entityIds).toEqual([]);
+    expect(transaction.operations.map((o) => o.type)).toEqual([
+      "UnassignEntityFromSubjectArea",
+      "DeleteEntity",
+    ]);
+    expect(undoTransaction(model, transaction)).toEqual(before);
+  });
 });
 
 describe("removeAttributeCascade", () => {

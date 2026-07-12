@@ -12,8 +12,16 @@ import { deleteSubjectArea, unassignEntityFromSubjectArea } from "./subjectArea.
 import type { UpdateDomainPayload } from "./types.js";
 
 // Compound edit: deleting an Entity that still has Relationships must remove those
-// Relationships first, then the Entity, as one atomically-undoable Transaction.
-// See "복합 동작" in /docs/operations.md.
+// Relationships first, then the Entity, as one atomically-undoable Transaction. Also
+// unassigns the Entity from its Subject Area (if any) first — without this,
+// SubjectArea.entityIds keeps a dangling reference to the now-deleted entity id forever,
+// breaking the "Entity.subjectAreaId and SubjectArea.entityIds never drift apart"
+// invariant assignEntityToSubjectArea/unassignEntityFromSubjectArea otherwise maintain.
+// Every current reader of entityIds (ErdCanvas, the SVG exporter) happens to defensively
+// filter out ids that no longer resolve to a real Entity, so this was never visibly
+// broken — just permanently-accumulating dead data in the Model, the same invariant gap
+// removeAttributeCascade closed for Relationships/Indexes. See "복합 동작" in
+// /docs/operations.md.
 export function deleteEntityCascade(
   model: Model,
   entityId: string,
@@ -21,6 +29,13 @@ export function deleteEntityCascade(
 ): { model: Model; transaction: Transaction } {
   let currentModel = model;
   const operations: Operation[] = [];
+
+  const entity = model.entities.find((e) => e.id === entityId);
+  if (entity?.subjectAreaId) {
+    const result = unassignEntityFromSubjectArea(currentModel, { entityId }, actorId);
+    currentModel = result.model;
+    operations.push(result.operation);
+  }
 
   const relationships = model.relationships.filter(
     (r) => r.sourceEntityId === entityId || r.targetEntityId === entityId,
