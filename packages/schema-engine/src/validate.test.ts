@@ -44,6 +44,67 @@ describe("validateModel", () => {
     expect(issues.some((i) => i.code === "orphan-entity")).toBe(true);
   });
 
+  it("flags a primary key attribute marked nullable", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          // setAttributeFlags has no guard against toggling isPrimaryKey and nullable
+          // independently, so a user can end up here via two separate checkbox clicks.
+          nullable: true,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        code: "primary-key-nullable",
+        attributeId: "a1",
+        severity: "error",
+      }),
+    );
+  });
+
+  it("does not flag a non-nullable primary key", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).not.toContain("primary-key-nullable");
+  });
+
   it("returns no issues for a valid connected model", () => {
     const model = emptyModel();
     model.entities.push(

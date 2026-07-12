@@ -135,6 +135,23 @@ function checkStructural(model: Model): ValidationIssue[] {
         });
       }
       seen.add(attr.name);
+
+      // setAttributeFlags has no guard against setting isPrimaryKey and nullable
+      // together — every real database implicitly forces a PRIMARY KEY column to NOT
+      // NULL regardless, so this wouldn't actually fail a deploy, but it would silently
+      // diverge from what every export/generator (Markdown, GraphQL, OpenAPI, Prisma)
+      // shows for that column — they'd all report it as optional when the deployed
+      // schema requires it. Same "the model lies about the database" shape as the
+      // default-type-mismatch checks above, just for nullability instead of a value.
+      if (attr.isPrimaryKey && attr.nullable) {
+        issues.push({
+          severity: "error",
+          code: "primary-key-nullable",
+          message: `Attribute "${attr.name}" on entity "${entity.logicalName}" is a primary key but marked nullable — every database enforces NOT NULL on primary keys regardless.`,
+          entityId: entity.id,
+          attributeId: attr.id,
+        });
+      }
     }
   }
 
