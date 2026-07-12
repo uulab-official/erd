@@ -81,6 +81,27 @@ export function removeAttribute(
 ): AttributeOpResult<"RemoveAttribute"> {
   const entity = requireEntity(model, payload.entityId);
   const attribute = requireAttribute(entity, payload.attributeId);
+  // Without this guard, removing an Attribute still referenced by a Relationship's
+  // sourceAttributeIds/targetAttributeIds or an Index's attributeIds would leave those
+  // referencing a since-deleted id — a dangling reference every downstream consumer
+  // (SQL adapter, generators) resolves via `.find()` + `.filter(Boolean)`, so it doesn't
+  // error, it just silently produces an incomplete FK/index with no warning. Mirrors
+  // deleteEntity's identical "still referenced — use the Cascade" guard.
+  const referencedByRelationship = model.relationships.some(
+    (r) =>
+      r.sourceAttributeIds.includes(attribute.id) || r.targetAttributeIds.includes(attribute.id),
+  );
+  if (referencedByRelationship) {
+    throw new Error(
+      `Attribute "${attribute.id}" is still referenced by a relationship — use removeAttributeCascade`,
+    );
+  }
+  const referencedByIndex = entity.indexes.some((i) => i.attributeIds.includes(attribute.id));
+  if (referencedByIndex) {
+    throw new Error(
+      `Attribute "${attribute.id}" is still referenced by an index — use removeAttributeCascade`,
+    );
+  }
   const index = entity.attributes.findIndex((a) => a.id === attribute.id);
   const nextModel = updateEntityAttributes(model, entity.id, (attrs) =>
     attrs.filter((a) => a.id !== attribute.id),

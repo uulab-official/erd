@@ -1,10 +1,11 @@
 import type { Attribute, Model, Relationship } from "@modelforge/schema-engine";
 import type { Operation, Transaction } from "@modelforge/sdk";
 import { applyInverse, applyOperation, toDispatchable } from "./apply.js";
-import { addAttribute, assignDomain, unassignDomain } from "./attribute.js";
+import { addAttribute, assignDomain, removeAttribute, unassignDomain } from "./attribute.js";
 import { deleteEntity, moveEntity } from "./entity.js";
 import { deleteEnum, unassignEnumFromAttribute } from "./enumType.js";
 import { deleteDomain, updateDomain } from "./governance.js";
+import { deleteIndex } from "./indexes.js";
 import { nextOperationId } from "./operation.js";
 import { createRelationship, deleteRelationship } from "./relationship.js";
 import { deleteSubjectArea, unassignEntityFromSubjectArea } from "./subjectArea.js";
@@ -37,6 +38,47 @@ export function deleteEntityCascade(
   return {
     model: currentModel,
     transaction: { id: nextOperationId(), operations, label: `Delete entity "${entityId}"` },
+  };
+}
+
+// Compound edit: removing an Attribute still referenced by a Relationship or an Index
+// must remove those first, then the Attribute, as one atomically-undoable Transaction —
+// mirrors deleteEntityCascade's relationship-then-entity ordering. A referencing Index is
+// deleted outright rather than shrunk to its remaining columns, matching this codebase's
+// existing "no partial Index edit" rule (see docs/operations.md — recreate instead).
+export function removeAttributeCascade(
+  model: Model,
+  entityId: string,
+  attributeId: string,
+  actorId: string,
+): { model: Model; transaction: Transaction } {
+  let currentModel = model;
+  const operations: Operation[] = [];
+
+  const relationships = model.relationships.filter(
+    (r) => r.sourceAttributeIds.includes(attributeId) || r.targetAttributeIds.includes(attributeId),
+  );
+  for (const relationship of relationships) {
+    const result = deleteRelationship(currentModel, { relationshipId: relationship.id }, actorId);
+    currentModel = result.model;
+    operations.push(result.operation);
+  }
+
+  const entity = currentModel.entities.find((e) => e.id === entityId);
+  const indexes = entity?.indexes.filter((i) => i.attributeIds.includes(attributeId)) ?? [];
+  for (const index of indexes) {
+    const result = deleteIndex(currentModel, { entityId, indexId: index.id }, actorId);
+    currentModel = result.model;
+    operations.push(result.operation);
+  }
+
+  const attributeResult = removeAttribute(currentModel, { entityId, attributeId }, actorId);
+  currentModel = attributeResult.model;
+  operations.push(attributeResult.operation);
+
+  return {
+    model: currentModel,
+    transaction: { id: nextOperationId(), operations, label: `Remove attribute "${attributeId}"` },
   };
 }
 

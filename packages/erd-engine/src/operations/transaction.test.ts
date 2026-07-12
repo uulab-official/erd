@@ -5,6 +5,7 @@ import { assignEnumToAttribute, createEnum } from "./enumType.js";
 import { createDomain } from "./governance.js";
 import { createRelationship } from "./relationship.js";
 import { assignEntityToSubjectArea, createSubjectArea } from "./subjectArea.js";
+import { createIndex } from "./indexes.js";
 import {
   connectEntitiesCascade,
   deleteDomainCascade,
@@ -13,6 +14,7 @@ import {
   deleteSubjectAreaCascade,
   moveEntitiesTransaction,
   redoTransaction,
+  removeAttributeCascade,
   undoTransaction,
   updateDomainCascade,
 } from "./transaction.js";
@@ -49,6 +51,41 @@ describe("deleteEntityCascade", () => {
   it("undoTransaction restores the entity and its relationship atomically", () => {
     const before = modelWithRelationship();
     const { model, transaction } = deleteEntityCascade(before, "customer", "user-1");
+    expect(undoTransaction(model, transaction)).toEqual(before);
+  });
+});
+
+describe("removeAttributeCascade", () => {
+  it("deletes the referencing relationship before the attribute", () => {
+    const before = modelWithRelationship();
+    const { model, transaction } = removeAttributeCascade(before, "order", "customer_id", "user-1");
+    expect(model.relationships).toEqual([]);
+    expect(model.entities.find((e) => e.id === "order")?.attributes).toHaveLength(1);
+    expect(transaction.operations.map((o) => o.type)).toEqual([
+      "DeleteRelationship",
+      "RemoveAttribute",
+    ]);
+  });
+
+  it("deletes a referencing index before the attribute", () => {
+    let before = createEntity(emptyModel(), customerEntity(), "user-1").model;
+    before = createIndex(
+      before,
+      {
+        entityId: "customer",
+        index: { id: "idx1", name: "idx_customer_id", attributeIds: ["id"], unique: true },
+      },
+      "user-1",
+    ).model;
+    const { model, transaction } = removeAttributeCascade(before, "customer", "id", "user-1");
+    expect(model.entities[0]?.indexes).toEqual([]);
+    expect(model.entities[0]?.attributes).toEqual([]);
+    expect(transaction.operations.map((o) => o.type)).toEqual(["DeleteIndex", "RemoveAttribute"]);
+  });
+
+  it("undoTransaction restores the attribute, its index, and its relationship atomically", () => {
+    const before = modelWithRelationship();
+    const { model, transaction } = removeAttributeCascade(before, "order", "customer_id", "user-1");
     expect(undoTransaction(model, transaction)).toEqual(before);
   });
 });

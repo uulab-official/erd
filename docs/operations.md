@@ -39,7 +39,7 @@ interface OperationResult {
 ### Attribute
 
 - `AddAttribute`
-- `RemoveAttribute`
+- `RemoveAttribute` — Relationship(`sourceAttributeIds`/`targetAttributeIds`) 또는 Index(`attributeIds`)가 아직 참조 중이면 에러를 던진다(`deleteEntity`/`deleteDomain` 등과 동일한 가드 패턴) — `removeAttributeCascade`(transaction.ts)로 그 Relationship/Index를 먼저 삭제해야 한다. Index는 부분 수정이 없다는 기존 규칙대로(위 Index 섹션 참고) 컬럼만 빼는 게 아니라 통째로 삭제된다.
 - `RenameAttribute`
 - `ChangeAttributeType` (type/length/scale)
 - `SetAttributeFlags` (nullable/isPrimaryKey/isForeignKey/isUnique)

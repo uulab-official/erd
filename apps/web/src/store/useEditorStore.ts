@@ -49,7 +49,7 @@ import {
   moveEntity as moveEntityOp,
   moveMemo as moveMemoOp,
   OperationHistory,
-  removeAttribute as removeAttributeOp,
+  removeAttributeCascade,
   renameAttribute as renameAttributeOp,
   renameEntity as renameEntityOp,
   setAttributeComment as setAttributeCommentOp,
@@ -354,12 +354,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   removeAttribute(entityId, attributeId) {
-    const { model, operation } = removeAttributeOp(
+    const { model, transaction } = removeAttributeCascade(
       get().model,
-      { entityId, attributeId },
+      entityId,
+      attributeId,
       ACTOR_ID,
     );
-    history.push(operation);
+    history.push(transaction);
     set({ model, issues: validateModel(model), ...historyFlags() });
   },
 

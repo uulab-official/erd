@@ -12,8 +12,11 @@ import {
 } from "./attribute.js";
 import { createEntity } from "./entity.js";
 import { createDomain } from "./governance.js";
+import { createIndex } from "./indexes.js";
+import { createRelationship } from "./relationship.js";
 import { applyInverse } from "./apply.js";
-import { customerEntity, emptyModel } from "./test-fixtures.js";
+import { customerEntity, emptyModel, orderEntity } from "./test-fixtures.js";
+import type { Relationship } from "@modelforge/schema-engine";
 
 function baseModel() {
   return createEntity(emptyModel(), customerEntity(), "user-1").model;
@@ -50,6 +53,40 @@ describe("addAttribute / removeAttribute", () => {
     );
     expect(model.entities[0]?.attributes).toHaveLength(0);
     expect(applyInverse(model, operation)).toEqual(before);
+  });
+
+  it("rejects removing an attribute still referenced by a relationship", () => {
+    let model = createEntity(emptyModel(), customerEntity(), "user-1").model;
+    model = createEntity(model, orderEntity(), "user-1").model;
+    const relationship: Relationship = {
+      id: "r1",
+      sourceEntityId: "customer",
+      targetEntityId: "order",
+      cardinality: "one-to-many",
+      kind: "non-identifying",
+      optionality: "mandatory",
+      sourceAttributeIds: ["id"],
+      targetAttributeIds: ["customer_id"],
+    };
+    model = createRelationship(model, relationship, "user-1").model;
+    expect(() =>
+      removeAttribute(model, { entityId: "order", attributeId: "customer_id" }, "user-1"),
+    ).toThrow(/still referenced by a relationship/);
+  });
+
+  it("rejects removing an attribute still referenced by an index", () => {
+    let model = createEntity(emptyModel(), customerEntity(), "user-1").model;
+    model = createIndex(
+      model,
+      {
+        entityId: "customer",
+        index: { id: "idx1", name: "idx_customer_id", attributeIds: ["id"], unique: true },
+      },
+      "user-1",
+    ).model;
+    expect(() =>
+      removeAttribute(model, { entityId: "customer", attributeId: "id" }, "user-1"),
+    ).toThrow(/still referenced by an index/);
   });
 });
 
