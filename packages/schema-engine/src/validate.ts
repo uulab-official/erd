@@ -602,6 +602,37 @@ function checkCircularIdentifyingRelationships(model: Model): ValidationIssue[] 
   return issues;
 }
 
+// changeAttributeType has no guard against retyping an attribute already used as a
+// relationship's source/target (unlike removeAttribute's hard block on deleting one) —
+// erwin-class tools let you freely edit types and only flag the resulting mismatch, since
+// retyping isn't destructive the way deleting the attribute out from under the
+// relationship would be. Without this check, a PK/FK type drift was invisible until an
+// actual SQL deploy attempt failed outright (most databases reject a FOREIGN KEY whose
+// column types don't match) — this surfaces it immediately in the Validation tab instead.
+function checkRelationshipAttributeTypeMismatch(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const entitiesById = new Map(model.entities.map((e) => [e.id, e]));
+  for (const rel of model.relationships) {
+    if (rel.sourceAttributeIds.length !== rel.targetAttributeIds.length) continue;
+    const source = entitiesById.get(rel.sourceEntityId);
+    const target = entitiesById.get(rel.targetEntityId);
+    if (!source || !target) continue;
+    for (let i = 0; i < rel.sourceAttributeIds.length; i++) {
+      const sourceAttr = source.attributes.find((a) => a.id === rel.sourceAttributeIds[i]);
+      const targetAttr = target.attributes.find((a) => a.id === rel.targetAttributeIds[i]);
+      if (!sourceAttr || !targetAttr || sourceAttr.type === targetAttr.type) continue;
+      issues.push({
+        severity: "error",
+        code: "relationship-attribute-type-mismatch",
+        message: `Relationship "${rel.name ?? rel.id}" links "${source.logicalName}.${sourceAttr.name}" (${sourceAttr.type}) to "${target.logicalName}.${targetAttr.name}" (${targetAttr.type}) — a foreign key requires matching column types.`,
+        entityId: target.id,
+        attributeId: targetAttr.id,
+      });
+    }
+  }
+  return issues;
+}
+
 // Structural invariants from /docs/schema-engine.md. Extend as new rules land.
 //
 // `reservedWords` is an explicit override for callers that want to check against a
@@ -618,6 +649,7 @@ export function validateModel(model: Model, reservedWords?: string[]): Validatio
     ...checkDuplicateIndexes(model),
     ...checkReservedWords(model, effectiveReservedWords),
     ...checkCircularIdentifyingRelationships(model),
+    ...checkRelationshipAttributeTypeMismatch(model),
     ...checkNamingConventions(model),
     ...checkAbbreviations(model),
     ...checkDictionaryTerms(model),

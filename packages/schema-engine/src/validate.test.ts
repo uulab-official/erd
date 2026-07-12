@@ -112,6 +112,116 @@ describe("validateModel", () => {
     expect(validateModel(model)).toEqual([]);
   });
 
+  it("flags a relationship whose source/target attribute types don't match", () => {
+    const model = emptyModel();
+    model.entities.push(
+      {
+        id: "e1",
+        logicalName: "Customer",
+        physicalName: "customer",
+        tags: [],
+        attributes: [
+          {
+            id: "a1",
+            name: "id",
+            logicalName: "ID",
+            type: "integer",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+      {
+        id: "e2",
+        logicalName: "Purchase",
+        physicalName: "purchase",
+        tags: [],
+        attributes: [
+          {
+            id: "a2",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+          {
+            id: "a3",
+            name: "customer_id",
+            logicalName: "Customer ID",
+            // Drifted out of sync with e1.a1's "integer" — e.g. via changeAttributeType,
+            // which has no guard against retyping an attribute already used as an FK.
+            type: "string",
+            nullable: false,
+            isPrimaryKey: false,
+            isForeignKey: true,
+            isUnique: false,
+          },
+        ],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+    );
+    model.relationships.push({
+      id: "r1",
+      sourceEntityId: "e1",
+      targetEntityId: "e2",
+      cardinality: "one-to-many",
+      kind: "non-identifying",
+      optionality: "mandatory",
+      sourceAttributeIds: ["a1"],
+      targetAttributeIds: ["a3"],
+    });
+
+    const issues = validateModel(model);
+    const mismatch = issues.find((i) => i.code === "relationship-attribute-type-mismatch");
+    expect(mismatch).toMatchObject({ severity: "error", entityId: "e2", attributeId: "a3" });
+  });
+
+  it("does not flag a relationship whose attribute ids are dangling references", () => {
+    const model = emptyModel();
+    model.entities.push(
+      {
+        id: "e1",
+        logicalName: "Customer",
+        physicalName: "customer",
+        tags: [],
+        attributes: [],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+      {
+        id: "e2",
+        logicalName: "Purchase",
+        physicalName: "purchase",
+        tags: [],
+        attributes: [],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+    );
+    model.relationships.push({
+      id: "r1",
+      sourceEntityId: "e1",
+      targetEntityId: "e2",
+      cardinality: "one-to-many",
+      kind: "non-identifying",
+      optionality: "mandatory",
+      sourceAttributeIds: ["missing-source"],
+      targetAttributeIds: ["missing-target"],
+    });
+
+    expect(
+      validateModel(model).some((i) => i.code === "relationship-attribute-type-mismatch"),
+    ).toBe(false);
+  });
+
   it("flags a duplicate index name", () => {
     const model = emptyModel();
     model.entities.push({
