@@ -420,11 +420,32 @@ function checkEnumIntegrity(model: Model): ValidationIssue[] {
         });
         continue;
       }
-      if (!enumsById.has(attr.enumId)) {
+      const enumType = enumsById.get(attr.enumId);
+      if (!enumType) {
         issues.push({
           severity: "error",
           code: "enum-not-found",
           message: `Attribute "${attr.name}" on entity "${entity.logicalName}" references missing enum "${attr.enumId}".`,
+          entityId: entity.id,
+          attributeId: attr.id,
+        });
+        continue;
+      }
+      // UpdateEnumValues has no guard against removing a value some Attribute's default
+      // still holds — the SQL adapter renders both the CHECK constraint (or MySQL's
+      // native enum(...) type) from the enum's current values and the DEFAULT clause
+      // from attr.default independently, so a stale default produces a CREATE TABLE that
+      // contradicts its own constraint (rejected by every SQL engine at deploy time, not
+      // just "suboptimal" like the other Deploy Plan warnings this session's fixes cover).
+      if (
+        attr.default !== undefined &&
+        attr.default !== null &&
+        !enumType.values.includes(String(attr.default))
+      ) {
+        issues.push({
+          severity: "error",
+          code: "enum-default-not-a-member",
+          message: `Attribute "${attr.name}" on entity "${entity.logicalName}" defaults to "${attr.default}", which isn't one of enum "${enumType.name}"'s current values.`,
           entityId: entity.id,
           attributeId: attr.id,
         });

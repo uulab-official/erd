@@ -881,6 +881,73 @@ describe("validateModel", () => {
     expect(codes).not.toContain("enum-not-found");
   });
 
+  it("flags an enum-typed attribute whose default is no longer one of the enum's values", () => {
+    const model = emptyModel();
+    model.enums = [{ id: "e1", name: "OrderStatus", values: ["pending", "shipped"] }];
+    model.entities.push({
+      id: "e1",
+      logicalName: "Order",
+      physicalName: "order",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "status",
+          logicalName: "Status",
+          type: "enum",
+          enumId: "e1",
+          // Stale — e.g. left over after UpdateEnumValues dropped "cancelled", which has
+          // no guard against a still-referenced default.
+          default: "cancelled",
+          nullable: false,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: false,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        code: "enum-default-not-a-member",
+        attributeId: "a1",
+        severity: "error",
+      }),
+    );
+  });
+
+  it("does not flag an enum-typed attribute whose default is a current enum value", () => {
+    const model = emptyModel();
+    model.enums = [{ id: "e1", name: "OrderStatus", values: ["pending", "shipped"] }];
+    model.entities.push({
+      id: "e1",
+      logicalName: "Order",
+      physicalName: "order",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "status",
+          logicalName: "Status",
+          type: "enum",
+          enumId: "e1",
+          default: "pending",
+          nullable: false,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: false,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).not.toContain("enum-default-not-a-member");
+  });
+
   it("flags duplicate domain names", () => {
     const model = emptyModel();
     model.domains = [
