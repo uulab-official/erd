@@ -14,6 +14,7 @@ export function VersionsPanel() {
     model,
     versions,
     versionsLoading,
+    versionsError,
     refreshVersions,
     saveVersion,
     restoreVersion,
@@ -158,7 +159,12 @@ export function VersionsPanel() {
       )}
 
       {versionsLoading && <p className="text-sm text-slate-400">Loading…</p>}
-      {!versionsLoading && versions.length === 0 && (
+      {!versionsLoading && versionsError && (
+        <p className="text-sm text-red-600" role="alert">
+          Couldn't load versions: {versionsError}
+        </p>
+      )}
+      {!versionsLoading && !versionsError && versions.length === 0 && (
         <p className="text-sm text-slate-400">
           No versions saved yet — save one above to create a restorable snapshot.
         </p>

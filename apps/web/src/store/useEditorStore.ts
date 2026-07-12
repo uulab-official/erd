@@ -228,6 +228,12 @@ interface EditorState {
   // the Model document in ModelStore, not in this in-memory state, so they survive reloads.
   versions: VersionSummary[];
   versionsLoading: boolean;
+  // Set when refreshVersions() rejects. Without this, a failed fetch left `versions`
+  // whatever it was before (often still empty on first load), and VersionsPanel had no
+  // way to tell "the fetch failed" apart from "there really are no versions yet" — the
+  // same silent-misrepresentation shape as the load()/save() gaps fixed earlier this
+  // pass, just for the Versions list instead of the Model itself.
+  versionsError: string | null;
   refreshVersions(): Promise<void>;
   saveVersion(label: string): Promise<void>;
   // Replaces the live model with a saved snapshot — treated like importModel (the new
@@ -266,6 +272,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   loading: false,
   versions: [],
   versionsLoading: false,
+  versionsError: null,
 
   addEntity(logicalName) {
     const id = crypto.randomUUID();
@@ -716,10 +723,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   async refreshVersions() {
-    set({ versionsLoading: true });
+    set({ versionsLoading: true, versionsError: null });
     try {
       const versions = await getModelStore().listVersions(get().model.id);
       set({ versions });
+    } catch (error) {
+      set({ versionsError: error instanceof Error ? error.message : String(error) });
     } finally {
       set({ versionsLoading: false });
     }
