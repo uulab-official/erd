@@ -25,8 +25,19 @@ export const useAuthStore = create<AuthState>((set) => ({
     const auth = getAuthService();
     if (!auth) return;
     set({ loading: true });
-    const user = await auth.currentUser();
-    set({ user, loading: false });
+    try {
+      const user = await auth.currentUser();
+      set({ user, loading: false });
+    } catch (error) {
+      // A network blip (or any other transient failure) here must not leave `loading`
+      // stuck at true forever — App.tsx renders a full-screen "Loading…" for as long as
+      // it's true, so an unhandled rejection here would soft-lock the entire app on
+      // startup with no escape but a hard refresh. Falls back to "not logged in" (safe
+      // default — LoginScreen), logged to the console for debugging rather than shown
+      // to the user, since this isn't a user action that failed.
+      console.error("[auth] Failed to check session:", error);
+      set({ user: null, loading: false });
+    }
   },
 
   async login(email, password) {
@@ -63,7 +74,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   async logout() {
     const auth = getAuthService();
     if (!auth) return;
-    await auth.logout();
-    set({ user: null });
+    try {
+      await auth.logout();
+      set({ user: null, error: null });
+    } catch (error) {
+      set({ error: messageOf(error) });
+    }
   },
 }));

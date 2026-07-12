@@ -43,7 +43,7 @@ export function Toolbar() {
     applyLayout,
     createMemo,
   } = useEditorStore();
-  const { user, logout } = useAuthStore();
+  const { user, logout, error: authError } = useAuthStore();
   const closeModel = useNavigationStore((state) => state.closeModel);
 
   function handleBackToModels() {
@@ -282,6 +282,11 @@ export function Toolbar() {
             <Button variant="ghost" size="sm" onClick={() => void logout()}>
               Logout
             </Button>
+            {authError && (
+              <span className="max-w-xs truncate text-sm text-red-600" role="alert">
+                Logout failed: {authError}
+              </span>
+            )}
           </>
         )}
       </div>
