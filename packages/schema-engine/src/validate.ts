@@ -1,4 +1,4 @@
-import type { Model, NamingRuleSet } from "./types.js";
+import type { Attribute, Model, NamingRuleSet } from "./types.js";
 
 export interface ValidationIssue {
   severity: "error" | "warning";
@@ -63,6 +63,52 @@ export const DEFAULT_RESERVED_WORDS = [
   "time",
   "timestamp",
 ];
+
+// changeAttributeType has no guard against retyping an attribute out from under its own
+// `default` — e.g. a boolean Attribute defaulting to `true`, retyped to "integer",
+// silently keeps `default: true`. The SQL adapter's formatDefault() (dialect.ts)
+// branches on the JS `typeof` of the value, not on the column's declared type, so it
+// would render `DEFAULT TRUE` on an INTEGER column — DDL every real SQL engine rejects.
+// Same "a modification invalidates something and nothing says so" shape as
+// checkRelationshipAttributeTypeMismatch/the enum-default check above, one level more
+// basic (the attribute's own type vs. its own default, not two attributes vs. each
+// other). Enum-typed attributes are excluded — that mismatch is enum-default-not-a-member's
+// job, which compares against the linked EnumType's values instead of a JS type.
+function defaultMatchesType(type: Attribute["type"], value: NonNullable<Attribute["default"]>) {
+  switch (type) {
+    case "boolean":
+      return typeof value === "boolean";
+    case "integer":
+    case "bigint":
+    case "float":
+      return typeof value === "number";
+    case "string":
+    case "uuid":
+    case "datetime":
+    case "json":
+      return typeof value === "string";
+    case "enum":
+      return true;
+  }
+}
+
+function checkAttributeDefaultTypeMismatch(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  for (const entity of model.entities) {
+    for (const attr of entity.attributes) {
+      if (attr.default === undefined || attr.default === null) continue;
+      if (defaultMatchesType(attr.type, attr.default)) continue;
+      issues.push({
+        severity: "error",
+        code: "attribute-default-type-mismatch",
+        message: `Attribute "${attr.name}" on entity "${entity.logicalName}" is typed "${attr.type}" but its default (${JSON.stringify(attr.default)}) is a ${typeof attr.default}.`,
+        entityId: entity.id,
+        attributeId: attr.id,
+      });
+    }
+  }
+  return issues;
+}
 
 function checkStructural(model: Model): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
@@ -667,6 +713,7 @@ export function validateModel(model: Model, reservedWords?: string[]): Validatio
   ];
   return [
     ...checkStructural(model),
+    ...checkAttributeDefaultTypeMismatch(model),
     ...checkDuplicateIndexes(model),
     ...checkReservedWords(model, effectiveReservedWords),
     ...checkCircularIdentifyingRelationships(model),

@@ -881,6 +881,82 @@ describe("validateModel", () => {
     expect(codes).not.toContain("enum-not-found");
   });
 
+  it("flags an attribute whose default's JS type doesn't match its declared type", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Order",
+      physicalName: "order",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "quantity",
+          logicalName: "Quantity",
+          // Drifted out of sync — e.g. via changeAttributeType, which has no guard
+          // against retyping an attribute out from under its own default.
+          type: "integer",
+          default: true,
+          nullable: false,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: false,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        code: "attribute-default-type-mismatch",
+        attributeId: "a1",
+        severity: "error",
+      }),
+    );
+  });
+
+  it("does not flag a default whose JS type matches its declared type", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Order",
+      physicalName: "order",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "quantity",
+          logicalName: "Quantity",
+          type: "integer",
+          default: 1,
+          nullable: false,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: false,
+        },
+        {
+          id: "a2",
+          name: "active",
+          logicalName: "Active",
+          type: "boolean",
+          default: true,
+          nullable: false,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: false,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).not.toContain(
+      "attribute-default-type-mismatch",
+    );
+  });
+
   it("flags an enum-typed attribute whose default is no longer one of the enum's values", () => {
     const model = emptyModel();
     model.enums = [{ id: "e1", name: "OrderStatus", values: ["pending", "shipped"] }];
