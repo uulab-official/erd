@@ -26,7 +26,12 @@ export const useModelListStore = create<ModelListState>((set, get) => ({
   },
 
   async remove(modelId) {
-    await getModelStore().remove(modelId);
-    set({ models: get().models.filter((m) => m.id !== modelId) });
+    set({ error: null });
+    try {
+      await getModelStore().remove(modelId);
+      set({ models: get().models.filter((m) => m.id !== modelId) });
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : String(error) });
+    }
   },
 }));

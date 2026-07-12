@@ -29,6 +29,7 @@ export function Dashboard() {
   const { newModel, load, save } = useEditorStore();
   const [newModelName, setNewModelName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     void refresh();
@@ -43,10 +44,20 @@ export function Dashboard() {
     const name = newModelName.trim();
     if (!name) return;
     setCreating(true);
+    setCreateError(null);
     try {
       const id = newModelId();
       newModel(id, name);
       await save();
+      // save() swallows its own rejection into useEditorStore's saveError rather than
+      // throwing (see that store for why), so a failed save wouldn't otherwise show up
+      // here — checked explicitly so we don't navigate into the editor for a model that
+      // was never actually persisted.
+      const saveFailure = useEditorStore.getState().saveError;
+      if (saveFailure) {
+        setCreateError(saveFailure);
+        return;
+      }
       setNewModelName("");
       openModel(id);
     } finally {
@@ -104,6 +115,11 @@ export function Dashboard() {
             {creating ? "Creating…" : "New Model"}
           </Button>
         </div>
+        {createError && (
+          <p className="text-sm text-red-600" role="alert">
+            Couldn't create the model: {createError}
+          </p>
+        )}
 
         {loading && <p className="text-sm text-slate-500">Loading…</p>}
         {error && <p className="text-sm text-red-600">{error}</p>}
