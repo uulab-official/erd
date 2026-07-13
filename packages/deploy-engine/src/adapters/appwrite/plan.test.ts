@@ -61,13 +61,24 @@ describe("planAppwriteDeployment", () => {
     };
     const current: Model = {
       ...deployed,
-      entities: [{ ...customerEntity(), attributes: [customerEntity().attributes[0]!] }],
+      entities: [
+        // The email_idx index only covers "email" — a real removeAttributeCascade would
+        // drop the index along with the attribute, so this fixture does too, keeping the
+        // scenario to strictly "an attribute was removed" rather than also exercising the
+        // index-definition-changed path from a dangling attributeId.
+        { ...customerEntity(), attributes: [customerEntity().attributes[0]!], indexes: [] },
+      ],
     };
     const plan = planAppwriteDeployment(current, deployed);
     expect(plan.steps).toEqual([
       expect.objectContaining({
         action: "drop-attribute",
         target: "customer.email",
+        destructive: true,
+      }),
+      expect.objectContaining({
+        action: "drop-index",
+        target: "customer.email_idx",
         destructive: true,
       }),
     ]);
@@ -77,6 +88,40 @@ describe("planAppwriteDeployment", () => {
     const model = shopModel();
     const plan = planAppwriteDeployment(model, model);
     expect(plan.steps).toEqual([]);
+  });
+
+  it("plans drop-then-create-index when an existing index's definition changes", () => {
+    const deployed: Model = {
+      id: "shop",
+      name: "Shop",
+      adapter: "appwrite",
+      entities: [customerEntity()],
+      relationships: [],
+      views: [],
+      sequences: [],
+      enums: [],
+    };
+    const current: Model = {
+      ...deployed,
+      entities: [
+        {
+          ...customerEntity(),
+          // Same index id/name as the deployed snapshot, but no longer unique — the
+          // UI's only way to "edit" an index is delete+recreate with the same name.
+          indexes: [{ ...customerEntity().indexes[0]!, unique: false }],
+        },
+      ],
+    };
+    const plan = planAppwriteDeployment(current, deployed);
+    const indexSteps = plan.steps.filter((s) => s.target === "customer.email_idx");
+    expect(indexSteps.map((s) => s.action)).toEqual(["drop-index", "create-index"]);
+    expect(indexSteps[0]?.warning).toMatch(/index's definition changed/i);
+  });
+
+  it("plans nothing for an index whose definition is unchanged", () => {
+    const model = shopModel();
+    const plan = planAppwriteDeployment(model, model);
+    expect(plan.steps.some((s) => s.target === "customer.email_idx")).toBe(false);
   });
 
   it("plans create-relationship when a relationship is added between deployed collections", () => {

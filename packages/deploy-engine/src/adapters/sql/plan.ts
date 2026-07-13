@@ -208,12 +208,29 @@ export function planSqlDeployment(
 
     const deployedIndexes = new Map(deployed.indexes.map((i) => [i.name, i]));
     for (const index of table.indexes) {
-      if (!deployedIndexes.has(index.name)) {
+      const existingIndex = deployedIndexes.get(index.name);
+      if (!existingIndex) {
         steps.push({
           action: "create-index",
           target: `${table.name}.${index.name}`,
           sql: dialect.createIndexDDL(index, table.name),
           destructive: false,
+        });
+      } else if (JSON.stringify(existingIndex) !== JSON.stringify(index)) {
+        // An index's columns/unique/method are baked into its CREATE INDEX statement, not
+        // alterable in place in any of the three dialects — matching-by-name alone (as
+        // this loop did before) silently treated a redefined index (same name, different
+        // columns/unique/method — the UI's only way to "edit" an index is delete+recreate
+        // with the same name) as already-deployed, so the actual index in the database
+        // never changed even though the Deploy Plan showed nothing to do. Same "drop and
+        // recreate rather than guess at in-place ALTER syntax" policy as the View case
+        // above.
+        steps.push({
+          action: "create-index",
+          target: `${table.name}.${index.name}`,
+          sql: `DROP INDEX ${q(index.name)};\n${dialect.createIndexDDL(index, table.name)}`,
+          destructive: false,
+          warning: "The index's definition changed — this drops and recreates it",
         });
       }
     }

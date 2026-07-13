@@ -261,6 +261,35 @@ describe("planSqlDeployment", () => {
     expect(step?.sql).toContain("CREATE VIEW");
   });
 
+  it("plans a drop-then-create-index when an existing index's definition changes", () => {
+    const deployed = shopModel();
+    const current: Model = {
+      ...deployed,
+      entities: [
+        {
+          ...customerEntity(),
+          // Same index id/name as the deployed snapshot, but no longer unique — the
+          // UI's only way to "edit" an index is delete+recreate with the same name, so
+          // this mirrors that path exactly.
+          indexes: [{ ...customerEntity().indexes[0]!, unique: false }],
+        },
+        deployed.entities[1]!,
+      ],
+    };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const step = plan.steps.find((s) => s.target === "customer.email_idx");
+    expect(step?.action).toBe("create-index");
+    expect(step?.sql).toContain("DROP INDEX");
+    expect(step?.sql).toContain("CREATE");
+    expect(step?.warning).toMatch(/index's definition changed/i);
+  });
+
+  it("plans nothing for an index whose definition is unchanged", () => {
+    const model = shopModel();
+    const plan = planSqlDeployment(model, model, dialect);
+    expect(plan.steps.some((s) => s.target === "customer.email_idx")).toBe(false);
+  });
+
   it("warns instead of guessing at sequence DDL for a dialect with no native sequence support", () => {
     const mysqlDialect = createMySqlDialect();
     const model = shopModel();
