@@ -1231,4 +1231,151 @@ describe("validateModel", () => {
     expect(codes.filter((c) => c === "duplicate-sequence-name")).toHaveLength(1);
     expect(codes).not.toContain("database-object-name-collision");
   });
+
+  it("flags two different entities sharing an index name", () => {
+    const model = emptyModel();
+    model.entities.push(
+      {
+        id: "e1",
+        logicalName: "Customer",
+        physicalName: "customer",
+        tags: [],
+        attributes: [
+          {
+            id: "a1",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        indexes: [{ id: "i1", name: "idx_email", attributeIds: ["a1"], unique: false }],
+        ui: { x: 0, y: 0 },
+      },
+      {
+        id: "e2",
+        logicalName: "Order",
+        physicalName: "order",
+        tags: [],
+        attributes: [
+          {
+            id: "a2",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        indexes: [{ id: "i2", name: "idx_email", attributeIds: ["a2"], unique: false }],
+        ui: { x: 0, y: 0 },
+      },
+    );
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        code: "duplicate-index-name-across-entities",
+        severity: "error",
+        entityId: "e2",
+      }),
+    );
+  });
+
+  it("flags an Index sharing a name with an Entity's physical table name", () => {
+    const model = emptyModel();
+    model.entities.push(
+      {
+        id: "e1",
+        logicalName: "Orders",
+        physicalName: "orders",
+        tags: [],
+        attributes: [
+          {
+            id: "a1",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+      {
+        id: "e2",
+        logicalName: "Customer",
+        physicalName: "customer",
+        tags: [],
+        attributes: [
+          {
+            id: "a2",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        indexes: [{ id: "i1", name: "orders", attributeIds: ["a2"], unique: false }],
+        ui: { x: 0, y: 0 },
+      },
+    );
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ code: "database-object-name-collision", severity: "error" }),
+    );
+  });
+
+  it("does not double-report a same-entity duplicate index name as a cross-entity collision", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+        {
+          id: "a2",
+          name: "email",
+          logicalName: "Email",
+          type: "string",
+          nullable: false,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [
+        { id: "i1", name: "idx_dup", attributeIds: ["a1"], unique: false },
+        { id: "i2", name: "idx_dup", attributeIds: ["a2"], unique: false },
+      ],
+      ui: { x: 0, y: 0 },
+    });
+
+    const codes = validateModel(model).map((i) => i.code);
+    expect(codes).not.toContain("duplicate-index-name-across-entities");
+    expect(codes).not.toContain("database-object-name-collision");
+  });
 });

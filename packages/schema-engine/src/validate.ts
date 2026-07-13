@@ -601,22 +601,59 @@ function checkDuplicateDictionaryTerms(model: Model): ValidationIssue[] {
 // silently excludes it from Deploy Plan, so a blanked-out View disappears with no trail.
 //
 // Beyond same-kind duplicates, PostgreSQL shares one relation namespace across tables,
-// views, and sequences within a schema — a Sequence or View named the same as an Entity's
-// physicalName (or as an already-claimed Sequence/View) makes `CREATE SEQUENCE`/
-// `CREATE VIEW` collide with that existing relation, failing outright at deploy. Neither
-// createSequence/createView (database.ts) nor this function previously checked across
-// object kinds, only within one — the same class of gap as
-// checkRelationshipAttributeTypeMismatch/the enum-default checks above, just at the
-// object-name level instead of the attribute level.
+// views, sequences, AND indexes within a schema (an index is itself a relation there,
+// same as a table/view/sequence) — a Sequence, View, or Index named the same as an
+// Entity's physicalName (or as an already-claimed object of any of these kinds) makes its
+// CREATE statement collide with that existing relation, failing outright at deploy.
+// checkDuplicateIndexes (above) only ever compared an Index's name against other Indexes
+// on the *same* Entity — two different Entities each having an index literally named
+// "idx_email" passed every existing check, yet PostgreSQL would reject the second
+// CREATE INDEX outright. Neither createSequence/createView (database.ts) nor this
+// function previously checked across object kinds or across Entities, only within one —
+// the same class of gap as checkRelationshipAttributeTypeMismatch/the enum-default checks
+// above, just at the object-name level instead of the attribute level.
 function checkDatabaseObjects(model: Model): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
   // Tracks every name already claimed by an earlier-processed kind, purely for the
   // cross-kind collision message — same-kind duplicates are reported separately below via
-  // seenSequenceNames/seenViewNames so a single colliding pair doesn't get double-flagged.
+  // seenSequenceNames/seenViewNames/seenIndexNames so a single colliding pair doesn't get
+  // double-flagged.
   const claimedBy = new Map<string, string>();
+  // Maps an index name to the id of the entity that first declared it — lets a second
+  // index of the same name on a *different* entity be flagged as a cross-entity
+  // collision, while a same-entity duplicate (already reported by checkDuplicateIndexes'
+  // "duplicate-index-name") is left alone here to avoid double-reporting.
+  const indexNameOwner = new Map<string, string>();
   for (const entity of model.entities) {
     claimedBy.set(entity.physicalName, `table "${entity.physicalName}"`);
+
+    for (const index of entity.indexes) {
+      const owner = indexNameOwner.get(index.name);
+      if (owner !== undefined) {
+        if (owner !== entity.id) {
+          issues.push({
+            severity: "error",
+            code: "duplicate-index-name-across-entities",
+            message: `Index "${index.name}" on entity "${entity.logicalName}" has the same name as an index on a different entity — PostgreSQL indexes share the schema's relation namespace, so the second CREATE INDEX would fail.`,
+            entityId: entity.id,
+          });
+        }
+        continue;
+      }
+
+      const collidesWith = claimedBy.get(index.name);
+      if (collidesWith) {
+        issues.push({
+          severity: "error",
+          code: "database-object-name-collision",
+          message: `Index "${index.name}" on entity "${entity.logicalName}" shares its name with ${collidesWith} — PostgreSQL shares one namespace for tables/views/sequences/indexes, so CREATE INDEX would collide with it.`,
+          entityId: entity.id,
+        });
+      }
+      indexNameOwner.set(index.name, entity.id);
+      claimedBy.set(index.name, `index "${index.name}"`);
+    }
   }
 
   const seenSequenceNames = new Set<string>();
