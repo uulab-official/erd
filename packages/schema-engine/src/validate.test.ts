@@ -1394,6 +1394,66 @@ describe("validateModel", () => {
     expect(codes).not.toContain("duplicate-subject-area-name");
   });
 
+  it("flags a Subject Area referencing an entity that no longer exists", () => {
+    const model = emptyModel();
+    model.subjectAreas = [{ id: "sa1", name: "Sales", entityIds: ["missing-entity"] }];
+
+    expect(validateModel(model).map((i) => i.code)).toContain("subject-area-entity-not-found");
+  });
+
+  it("flags an Entity whose subjectAreaId points at a Subject Area that no longer exists", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [],
+      indexes: [],
+      subjectAreaId: "missing-subject-area",
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).toContain("subject-area-entity-not-found");
+  });
+
+  it("flags a two-way mismatch between Entity.subjectAreaId and SubjectArea.entityIds", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [],
+      indexes: [],
+      // Points at sa1, but sa1.entityIds (below) doesn't list "e1" back.
+      subjectAreaId: "sa1",
+      ui: { x: 0, y: 0 },
+    });
+    model.subjectAreas = [{ id: "sa1", name: "Sales", entityIds: [] }];
+
+    expect(validateModel(model).map((i) => i.code)).toContain("subject-area-membership-mismatch");
+  });
+
+  it("does not flag a consistent Entity/Subject Area membership", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [],
+      indexes: [],
+      subjectAreaId: "sa1",
+      ui: { x: 0, y: 0 },
+    });
+    model.subjectAreas = [{ id: "sa1", name: "Sales", entityIds: ["e1"] }];
+
+    const codes = validateModel(model).map((i) => i.code);
+    expect(codes).not.toContain("subject-area-entity-not-found");
+    expect(codes).not.toContain("subject-area-membership-mismatch");
+  });
+
   it("flags duplicate dictionary terms, case-insensitively", () => {
     const model = emptyModel();
     model.dictionary = [

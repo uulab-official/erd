@@ -599,6 +599,66 @@ function checkDuplicateGovernanceNames(model: Model): ValidationIssue[] {
   return issues;
 }
 
+// assignEntityToSubjectArea/unassignEntityFromSubjectArea (erd-engine) always write
+// Entity.subjectAreaId and SubjectArea.entityIds together, and deleteEntityCascade
+// unassigns an Entity from its Subject Area before removing it — so this two-way
+// membership invariant should never drift as long as only Operations touch the Model.
+// But nothing has ever verified that a Model that arrived a different way (hand-edited
+// JSON, an older export, a future Operation bug) actually satisfies it. A break here
+// isn't a deploy-time SQL failure like the checks above — Subject Areas are a
+// canvas/diagram-only concept, not deployed — but it does corrupt the UI: a dangling
+// entityId defensively renders around a missing Entity (ErdCanvas, SVG exporter both
+// already filter it out), and, as found earlier this session, it can leave the
+// Governance panel's "Delete Subject Area" button permanently disabled because the
+// (dead) entityIds never seems empty.
+function checkSubjectAreaEntityConsistency(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const entitiesById = new Map(model.entities.map((e) => [e.id, e]));
+  const subjectAreasById = new Map((model.subjectAreas ?? []).map((s) => [s.id, s]));
+
+  for (const subjectArea of model.subjectAreas ?? []) {
+    for (const entityId of subjectArea.entityIds) {
+      const entity = entitiesById.get(entityId);
+      if (!entity) {
+        issues.push({
+          severity: "error",
+          code: "subject-area-entity-not-found",
+          message: `Subject Area "${subjectArea.name}" references an entity that no longer exists.`,
+        });
+      } else if (entity.subjectAreaId !== subjectArea.id) {
+        issues.push({
+          severity: "error",
+          code: "subject-area-membership-mismatch",
+          message: `Subject Area "${subjectArea.name}" lists entity "${entity.logicalName}", but that entity's own subjectAreaId doesn't point back to it.`,
+          entityId: entity.id,
+        });
+      }
+    }
+  }
+
+  for (const entity of model.entities) {
+    if (!entity.subjectAreaId) continue;
+    const subjectArea = subjectAreasById.get(entity.subjectAreaId);
+    if (!subjectArea) {
+      issues.push({
+        severity: "error",
+        code: "subject-area-entity-not-found",
+        message: `Entity "${entity.logicalName}" is assigned to a Subject Area that no longer exists.`,
+        entityId: entity.id,
+      });
+    } else if (!subjectArea.entityIds.includes(entity.id)) {
+      issues.push({
+        severity: "error",
+        code: "subject-area-membership-mismatch",
+        message: `Entity "${entity.logicalName}" points at Subject Area "${subjectArea.name}", but that Subject Area doesn't list it back.`,
+        entityId: entity.id,
+      });
+    }
+  }
+
+  return issues;
+}
+
 // checkDictionaryTerms (above) looks up a word's standard spelling via
 // `new Map(entries.map((e) => [e.logicalTerm.toLowerCase(), e.standardName]))` — two
 // DictionaryEntry objects sharing a logicalTerm (case-insensitively, matching that Map's
@@ -895,6 +955,7 @@ export function validateModel(model: Model, reservedWords?: string[]): Validatio
     ...checkDomainDrift(model),
     ...checkEnumIntegrity(model),
     ...checkDuplicateGovernanceNames(model),
+    ...checkSubjectAreaEntityConsistency(model),
     ...checkDuplicateDictionaryTerms(model),
     ...checkDatabaseObjects(model),
   ];
