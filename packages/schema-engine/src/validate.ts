@@ -823,6 +823,52 @@ function checkRelationshipAttributeTypeMismatch(model: Model): ValidationIssue[]
   return issues;
 }
 
+// createRelationship (erd-engine) now guards against a *newly created* Relationship
+// referencing an attribute id that doesn't belong to its own source/target entity, but a
+// Model that already has this defect (hand-edited, or built by a future importer bug)
+// has no way to surface it — checkRelationshipAttributeTypeMismatch above explicitly
+// skips a dangling reference ("if (!sourceAttr || !targetAttr ...) continue"), since a
+// missing attribute isn't a type mismatch, it's a different problem. Same "resolved with
+// .find() instead of validated" shape as the Index attributeIds check above, just for
+// Relationship source/targetAttributeIds instead of Index.attributeIds — the SQL
+// adapter's FK column resolution (toNativeSchema.ts) silently drops a dangling id from
+// the FK's column list instead of erroring, producing a foreign key with fewer columns
+// than the Relationship models, or none at all.
+function checkRelationshipAttributeReferences(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const entitiesById = new Map(model.entities.map((e) => [e.id, e]));
+
+  for (const rel of model.relationships) {
+    const source = entitiesById.get(rel.sourceEntityId);
+    if (source) {
+      const ownIds = new Set(source.attributes.map((a) => a.id));
+      if (rel.sourceAttributeIds.some((id) => !ownIds.has(id))) {
+        issues.push({
+          severity: "error",
+          code: "relationship-attribute-not-found",
+          message: `Relationship "${rel.name ?? rel.id}" references a source attribute that doesn't belong to "${source.logicalName}" — it would be silently dropped from the foreign key at deploy.`,
+          entityId: source.id,
+        });
+      }
+    }
+
+    const target = entitiesById.get(rel.targetEntityId);
+    if (target) {
+      const ownIds = new Set(target.attributes.map((a) => a.id));
+      if (rel.targetAttributeIds.some((id) => !ownIds.has(id))) {
+        issues.push({
+          severity: "error",
+          code: "relationship-attribute-not-found",
+          message: `Relationship "${rel.name ?? rel.id}" references a target attribute that doesn't belong to "${target.logicalName}" — it would be silently dropped from the foreign key at deploy.`,
+          entityId: target.id,
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
 // Structural invariants from /docs/schema-engine.md. Extend as new rules land.
 //
 // `reservedWords` is an explicit override for callers that want to check against a
@@ -842,6 +888,7 @@ export function validateModel(model: Model, reservedWords?: string[]): Validatio
     ...checkReservedWords(model, effectiveReservedWords),
     ...checkCircularIdentifyingRelationships(model),
     ...checkRelationshipAttributeTypeMismatch(model),
+    ...checkRelationshipAttributeReferences(model),
     ...checkNamingConventions(model),
     ...checkAbbreviations(model),
     ...checkDictionaryTerms(model),

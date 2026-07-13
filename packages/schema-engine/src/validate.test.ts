@@ -283,6 +283,169 @@ describe("validateModel", () => {
     ).toBe(false);
   });
 
+  it("flags a relationship whose attribute ids are dangling references", () => {
+    const model = emptyModel();
+    model.entities.push(
+      {
+        id: "e1",
+        logicalName: "Customer",
+        physicalName: "customer",
+        tags: [],
+        attributes: [],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+      {
+        id: "e2",
+        logicalName: "Purchase",
+        physicalName: "purchase",
+        tags: [],
+        attributes: [],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+    );
+    model.relationships.push({
+      id: "r1",
+      sourceEntityId: "e1",
+      targetEntityId: "e2",
+      cardinality: "one-to-many",
+      kind: "non-identifying",
+      optionality: "mandatory",
+      sourceAttributeIds: ["missing-source"],
+      targetAttributeIds: ["missing-target"],
+    });
+
+    const issues = validateModel(model);
+    expect(issues.filter((i) => i.code === "relationship-attribute-not-found")).toHaveLength(2);
+  });
+
+  it("flags a relationship whose source attribute belongs to a different entity", () => {
+    const model = emptyModel();
+    model.entities.push(
+      {
+        id: "e1",
+        logicalName: "Customer",
+        physicalName: "customer",
+        tags: [],
+        attributes: [
+          {
+            id: "a1",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+      {
+        id: "e2",
+        logicalName: "Purchase",
+        physicalName: "purchase",
+        tags: [],
+        attributes: [
+          {
+            id: "a2",
+            name: "customer_id",
+            logicalName: "Customer ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: false,
+            isForeignKey: true,
+            isUnique: false,
+          },
+        ],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+    );
+    model.relationships.push({
+      id: "r1",
+      sourceEntityId: "e1",
+      targetEntityId: "e2",
+      cardinality: "one-to-many",
+      kind: "non-identifying",
+      optionality: "mandatory",
+      // "a2" belongs to e2 (the target), not e1 (the source).
+      sourceAttributeIds: ["a2"],
+      targetAttributeIds: ["a2"],
+    });
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        code: "relationship-attribute-not-found",
+        severity: "error",
+        entityId: "e1",
+      }),
+    );
+  });
+
+  it("does not flag a relationship whose attribute ids all belong to their own entity", () => {
+    const model = emptyModel();
+    model.entities.push(
+      {
+        id: "e1",
+        logicalName: "Customer",
+        physicalName: "customer",
+        tags: [],
+        attributes: [
+          {
+            id: "a1",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+      {
+        id: "e2",
+        logicalName: "Purchase",
+        physicalName: "purchase",
+        tags: [],
+        attributes: [
+          {
+            id: "a2",
+            name: "customer_id",
+            logicalName: "Customer ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: false,
+            isForeignKey: true,
+            isUnique: false,
+          },
+        ],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+    );
+    model.relationships.push({
+      id: "r1",
+      sourceEntityId: "e1",
+      targetEntityId: "e2",
+      cardinality: "one-to-many",
+      kind: "non-identifying",
+      optionality: "mandatory",
+      sourceAttributeIds: ["a1"],
+      targetAttributeIds: ["a2"],
+    });
+
+    expect(validateModel(model).map((i) => i.code)).not.toContain(
+      "relationship-attribute-not-found",
+    );
+  });
+
   it("flags a duplicate index name", () => {
     const model = emptyModel();
     model.entities.push({

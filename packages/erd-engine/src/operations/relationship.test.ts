@@ -39,6 +39,18 @@ describe("createRelationship / deleteRelationship", () => {
     expect(applyInverse(model, operation)).toEqual(before);
   });
 
+  it("throws when a source attribute does not belong to the source entity", () => {
+    const before = baseModel();
+    const relationship = { ...placesRelationship(), sourceAttributeIds: ["customer_id"] };
+    expect(() => createRelationship(before, relationship, "user-1")).toThrow();
+  });
+
+  it("throws when a target attribute does not belong to the target entity", () => {
+    const before = baseModel();
+    const relationship = { ...placesRelationship(), targetAttributeIds: ["not-on-order"] };
+    expect(() => createRelationship(before, relationship, "user-1")).toThrow();
+  });
+
   it("rejects a relationship referencing an unknown entity", () => {
     const before = baseModel();
     expect(() =>
