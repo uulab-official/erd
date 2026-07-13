@@ -1179,4 +1179,56 @@ describe("validateModel", () => {
     expect(codes).not.toContain("duplicate-view-name");
     expect(codes).not.toContain("view-missing-sql");
   });
+
+  it("flags a Sequence sharing a name with an Entity's physical table name", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Orders",
+      physicalName: "orders",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [],
+      ui: { x: 0, y: 0 },
+    });
+    model.sequences = [{ id: "s1", name: "orders", start: 1, increment: 1 }];
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ code: "database-object-name-collision", severity: "error" }),
+    );
+  });
+
+  it("flags a View sharing a name with a Sequence", () => {
+    const model = emptyModel();
+    model.sequences = [{ id: "s1", name: "audit_log", start: 1, increment: 1 }];
+    model.views = [{ id: "v1", name: "audit_log", sql: "SELECT 1" }];
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ code: "database-object-name-collision", severity: "error" }),
+    );
+  });
+
+  it("does not double-report a same-kind duplicate as a cross-kind collision", () => {
+    const model = emptyModel();
+    model.sequences = [
+      { id: "s1", name: "order_seq", start: 1, increment: 1 },
+      { id: "s2", name: "order_seq", start: 1, increment: 1 },
+    ];
+    const codes = validateModel(model).map((i) => i.code);
+    expect(codes.filter((c) => c === "duplicate-sequence-name")).toHaveLength(1);
+    expect(codes).not.toContain("database-object-name-collision");
+  });
 });

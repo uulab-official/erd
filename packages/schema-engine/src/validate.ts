@@ -599,8 +599,25 @@ function checkDuplicateDictionaryTerms(model: Model): ValidationIssue[] {
 // sharing a name would emit two colliding `CREATE SEQUENCE`/`CREATE VIEW` statements in
 // the SQL adapter. Also flags a View with no `sql` — the SQL adapter's toNativeSchema
 // silently excludes it from Deploy Plan, so a blanked-out View disappears with no trail.
+//
+// Beyond same-kind duplicates, PostgreSQL shares one relation namespace across tables,
+// views, and sequences within a schema — a Sequence or View named the same as an Entity's
+// physicalName (or as an already-claimed Sequence/View) makes `CREATE SEQUENCE`/
+// `CREATE VIEW` collide with that existing relation, failing outright at deploy. Neither
+// createSequence/createView (database.ts) nor this function previously checked across
+// object kinds, only within one — the same class of gap as
+// checkRelationshipAttributeTypeMismatch/the enum-default checks above, just at the
+// object-name level instead of the attribute level.
 function checkDatabaseObjects(model: Model): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+
+  // Tracks every name already claimed by an earlier-processed kind, purely for the
+  // cross-kind collision message — same-kind duplicates are reported separately below via
+  // seenSequenceNames/seenViewNames so a single colliding pair doesn't get double-flagged.
+  const claimedBy = new Map<string, string>();
+  for (const entity of model.entities) {
+    claimedBy.set(entity.physicalName, `table "${entity.physicalName}"`);
+  }
 
   const seenSequenceNames = new Set<string>();
   for (const sequence of model.sequences) {
@@ -610,8 +627,18 @@ function checkDatabaseObjects(model: Model): ValidationIssue[] {
         code: "duplicate-sequence-name",
         message: `Duplicate sequence name "${sequence.name}".`,
       });
+    } else {
+      const collidesWith = claimedBy.get(sequence.name);
+      if (collidesWith) {
+        issues.push({
+          severity: "error",
+          code: "database-object-name-collision",
+          message: `Sequence "${sequence.name}" shares its name with ${collidesWith} — PostgreSQL shares one namespace for tables/views/sequences, so CREATE SEQUENCE would collide with it.`,
+        });
+      }
     }
     seenSequenceNames.add(sequence.name);
+    claimedBy.set(sequence.name, `sequence "${sequence.name}"`);
   }
 
   const seenViewNames = new Set<string>();
@@ -622,8 +649,18 @@ function checkDatabaseObjects(model: Model): ValidationIssue[] {
         code: "duplicate-view-name",
         message: `Duplicate view name "${view.name}".`,
       });
+    } else {
+      const collidesWith = claimedBy.get(view.name);
+      if (collidesWith) {
+        issues.push({
+          severity: "error",
+          code: "database-object-name-collision",
+          message: `View "${view.name}" shares its name with ${collidesWith} — PostgreSQL shares one namespace for tables/views/sequences, so CREATE VIEW would collide with it.`,
+        });
+      }
     }
     seenViewNames.add(view.name);
+    claimedBy.set(view.name, `view "${view.name}"`);
 
     if (!view.sql?.trim()) {
       issues.push({
