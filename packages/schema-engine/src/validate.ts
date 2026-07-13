@@ -218,6 +218,38 @@ function checkDuplicateIndexes(model: Model): ValidationIssue[] {
   return issues;
 }
 
+// createIndex/updateIndex (erd-engine) never validate that an Index's attributeIds
+// actually resolve to attributes on its *own* Entity — nothing stops an attributeId
+// that's dangling (points at nothing, e.g. a stale id from a hand-edited import) or
+// that belongs to a completely different Entity. toNativeSchema's index rendering
+// resolves each attributeId via `entity.attributes.find(...).filter(Boolean)`, so a
+// bad id is silently dropped from the column list instead of erroring — a two-column
+// index quietly becomes a one-column index (or, if every id is bad, an empty-column
+// index that would fail outright at `CREATE INDEX name ON table ()`). Same "resolved
+// with .find().filter(Boolean) instead of validated" shape as the FK column resolution
+// above, just for Index.attributeIds instead of Relationship attribute ids.
+function checkIndexAttributeReferences(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  for (const entity of model.entities) {
+    const ownAttributeIds = new Set(entity.attributes.map((a) => a.id));
+
+    for (const index of entity.indexes) {
+      const danglingIds = index.attributeIds.filter((id) => !ownAttributeIds.has(id));
+      if (danglingIds.length > 0) {
+        issues.push({
+          severity: "error",
+          code: "index-attribute-not-found",
+          message: `Index "${index.name}" on entity "${entity.logicalName}" references an attribute that doesn't belong to this entity — it would be silently dropped from the index's column list at deploy.`,
+          entityId: entity.id,
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
 function checkReservedWords(model: Model, reservedWords: string[]): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const reserved = new Set(reservedWords.map((w) => w.toLowerCase()));
@@ -806,6 +838,7 @@ export function validateModel(model: Model, reservedWords?: string[]): Validatio
     ...checkStructural(model),
     ...checkAttributeDefaultTypeMismatch(model),
     ...checkDuplicateIndexes(model),
+    ...checkIndexAttributeReferences(model),
     ...checkReservedWords(model, effectiveReservedWords),
     ...checkCircularIdentifyingRelationships(model),
     ...checkRelationshipAttributeTypeMismatch(model),

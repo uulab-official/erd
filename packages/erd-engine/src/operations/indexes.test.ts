@@ -30,6 +30,17 @@ describe("createIndex / deleteIndex", () => {
     expect(() => createIndex(before, { entityId: "missing", index }, "user-1")).toThrow();
   });
 
+  it("throws when an index attributeId does not belong to the target entity", () => {
+    const before = baseModel();
+    const index = {
+      id: "idx_id",
+      name: "idx_customer_id",
+      attributeIds: ["not-a-real-attribute"],
+      unique: true,
+    };
+    expect(() => createIndex(before, { entityId: "customer", index }, "user-1")).toThrow();
+  });
+
   it("deleteIndex's inverse restores the index at its original position", () => {
     const before = baseModel();
     const index = { id: "idx_id", name: "idx_customer_id", attributeIds: ["id"], unique: true };

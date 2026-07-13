@@ -322,6 +322,114 @@ describe("validateModel", () => {
     expect(validateModel(model).map((i) => i.code)).toContain("duplicate-index-name");
   });
 
+  it("flags an index referencing an attribute id from a different entity", () => {
+    const model = emptyModel();
+    model.entities.push(
+      {
+        id: "e1",
+        logicalName: "Customer",
+        physicalName: "customer",
+        tags: [],
+        attributes: [
+          {
+            id: "a1",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        // References "a2", which belongs to entity e2 below, not this entity.
+        indexes: [{ id: "i1", name: "idx_bad", attributeIds: ["a2"], unique: false }],
+        ui: { x: 0, y: 0 },
+      },
+      {
+        id: "e2",
+        logicalName: "Order",
+        physicalName: "order",
+        tags: [],
+        attributes: [
+          {
+            id: "a2",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+    );
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        code: "index-attribute-not-found",
+        severity: "error",
+        entityId: "e1",
+      }),
+    );
+  });
+
+  it("flags an index referencing a dangling attribute id", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [{ id: "i1", name: "idx_bad", attributeIds: ["missing-id"], unique: false }],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).toContain("index-attribute-not-found");
+  });
+
+  it("does not flag an index whose attributeIds all belong to its own entity", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [{ id: "i1", name: "idx_ok", attributeIds: ["a1"], unique: false }],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).not.toContain("index-attribute-not-found");
+  });
+
   it("flags two indexes covering the same columns", () => {
     const model = emptyModel();
     model.entities.push({
