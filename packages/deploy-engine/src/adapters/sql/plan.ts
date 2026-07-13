@@ -248,7 +248,8 @@ export function planSqlDeployment(
 
     const deployedFks = new Map(deployed.foreignKeys.map((fk) => [fk.name, fk]));
     for (const fk of table.foreignKeys) {
-      if (!deployedFks.has(fk.name)) {
+      const existingFk = deployedFks.get(fk.name);
+      if (!existingFk) {
         steps.push(
           dialect.supportsAlterForeignKey
             ? {
@@ -262,6 +263,28 @@ export function planSqlDeployment(
                 target: `${table.name}.${fk.name}`,
                 destructive: false,
                 warning: `${dialect.name} does not support adding foreign keys via ALTER TABLE — recreate "${table.name}" to add this constraint`,
+              },
+        );
+      } else if (JSON.stringify(existingFk) !== JSON.stringify(fk)) {
+        // Same "matched by name alone treated a redefinition as already-deployed" gap as
+        // the index case above — the FK's name is derived from the table + relationship
+        // id/name, so editing e.g. onDelete/onUpdate via the Relationship Inspector (no
+        // rename involved) kept matching the deployed constraint by name and never
+        // re-emitted it, leaving the real database's constraint exactly as it was.
+        steps.push(
+          dialect.supportsAlterForeignKey
+            ? {
+                action: "create-relationship",
+                target: `${table.name}.${fk.name}`,
+                sql: `ALTER TABLE ${q(table.name)} DROP CONSTRAINT ${q(fk.name)};\n${dialect.foreignKeyDDL(fk, table.name)}`,
+                destructive: false,
+                warning: "The foreign key's definition changed — this drops and recreates it",
+              }
+            : {
+                action: "create-relationship",
+                target: `${table.name}.${fk.name}`,
+                destructive: false,
+                warning: `${dialect.name} does not support altering foreign keys via ALTER TABLE — recreate "${table.name}" to apply this change`,
               },
         );
       }

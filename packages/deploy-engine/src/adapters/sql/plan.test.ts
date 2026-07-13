@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createPostgresDialect } from "./dialect.js";
 import { createMySqlDialect } from "./mysql.js";
 import { planSqlDeployment, rollbackSqlPlan } from "./plan.js";
-import { customerEntity, orderEntity, shopModel } from "./test-fixtures.js";
+import { customerEntity, orderEntity, placesRelationship, shopModel } from "./test-fixtures.js";
 import type { Model } from "@modelforge/schema-engine";
 
 const dialect = createPostgresDialect();
@@ -218,6 +218,28 @@ describe("planSqlDeployment", () => {
     const plan = planSqlDeployment(current, deployed, dialect);
     const emailStep = plan.steps.find((s) => s.target === "customer.email");
     expect(emailStep?.warning).toMatch(/UNIQUE constraint.*isn't captured/i);
+  });
+
+  it("plans a drop-then-recreate foreign key when an existing FK's definition changes (e.g. onDelete)", () => {
+    const deployed = shopModel();
+    const current: Model = {
+      ...deployed,
+      relationships: [{ ...placesRelationship(), onDelete: "set-null" }],
+    };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const step = plan.steps.find((s) => s.target === "purchase_order.fk_purchase_order_places");
+    expect(step?.action).toBe("create-relationship");
+    expect(step?.sql).toContain("DROP CONSTRAINT");
+    expect(step?.sql).toContain("ADD CONSTRAINT");
+    expect(step?.warning).toMatch(/foreign key's definition changed/i);
+  });
+
+  it("plans nothing for a foreign key whose definition is unchanged", () => {
+    const model = shopModel();
+    const plan = planSqlDeployment(model, model, dialect);
+    expect(plan.steps.some((s) => s.target === "purchase_order.fk_purchase_order_places")).toBe(
+      false,
+    );
   });
 
   it("plans create-sequence/create-view when a Sequence/View is added", () => {
