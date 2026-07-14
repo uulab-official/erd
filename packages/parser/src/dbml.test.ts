@@ -124,6 +124,42 @@ describe("parseDbml", () => {
     ]);
   });
 
+  it("parses an index's [type: ...] setting", () => {
+    const model2 = parseDbml(`
+Table widgets {
+  id uuid [pk]
+  sku varchar(50)
+
+  indexes {
+    sku [type: hash, name: 'idx_widgets_sku']
+  }
+}
+`);
+    expect(model2.entities[0]!.indexes).toEqual([
+      {
+        id: "widgets.idx.sku",
+        name: "idx_widgets_sku",
+        attributeIds: ["widgets.sku"],
+        unique: false,
+        type: "hash",
+      },
+    ]);
+  });
+
+  it("ignores an unrecognized index [type: ...] value rather than guessing", () => {
+    const model2 = parseDbml(`
+Table widgets {
+  id uuid [pk]
+  sku varchar(50)
+
+  indexes {
+    sku [type: spgist]
+  }
+}
+`);
+    expect(model2.entities[0]!.indexes[0]).not.toHaveProperty("type");
+  });
+
   it("reverses '<' refs so the relationship still points one-side to many-side", () => {
     const model2 = parseDbml(`
 Table a {
