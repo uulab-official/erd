@@ -27,22 +27,40 @@ export function planSqlDeployment(
 
   const deployedByName = new Map(deployedSchema.tables.map((t) => [t.name, t]));
 
-  const deployedSequenceNames = new Set(deployedSchema.sequences.map((s) => s.name));
+  const deployedSequenceByName = new Map(deployedSchema.sequences.map((s) => [s.name, s]));
   for (const sequence of currentSchema.sequences) {
-    if (deployedSequenceNames.has(sequence.name)) continue;
-    const step: MigrationStep = {
-      action: "create-sequence",
-      target: sequence.name,
-      sql: dialect.createSequenceDDL(sequence),
-      destructive: false,
-    };
-    // supportsSequences === false means createSequenceDDL returned "" above — don't
-    // guess at MySQL/SQLite syntax for a concept they have no native equivalent of, the
-    // same policy already used for SQLite's FK-ALTER limitation.
-    if (!dialect.supportsSequences) {
-      step.warning = `${dialect.name} has no native sequence object — model auto-increment on the column itself instead, or manage this sequence outside ModelForge.`;
+    const existingSequence = deployedSequenceByName.get(sequence.name);
+    if (!existingSequence) {
+      const step: MigrationStep = {
+        action: "create-sequence",
+        target: sequence.name,
+        sql: dialect.createSequenceDDL(sequence),
+        destructive: false,
+      };
+      // supportsSequences === false means createSequenceDDL returned "" above — don't
+      // guess at MySQL/SQLite syntax for a concept they have no native equivalent of, the
+      // same policy already used for SQLite's FK-ALTER limitation.
+      if (!dialect.supportsSequences) {
+        step.warning = `${dialect.name} has no native sequence object — model auto-increment on the column itself instead, or manage this sequence outside ModelForge.`;
+      }
+      steps.push(step);
+    } else if (
+      dialect.supportsSequences &&
+      (existingSequence.start !== sequence.start ||
+        existingSequence.increment !== sequence.increment)
+    ) {
+      // Same "matched by name alone treated a redefinition as already-deployed" gap as
+      // the index/FK cases above — a Sequence's start/increment can change via
+      // updateSequence (Governance panel) without touching its name, so name-only
+      // matching silently no-op'd the edit at deploy time. Unlike Index/FK, PostgreSQL
+      // can express this in place via ALTER SEQUENCE, so no drop+recreate is needed here.
+      steps.push({
+        action: "alter-sequence",
+        target: sequence.name,
+        sql: `ALTER SEQUENCE ${q(sequence.name)} INCREMENT BY ${sequence.increment} RESTART WITH ${sequence.start};`,
+        destructive: false,
+      });
     }
-    steps.push(step);
   }
   const currentSequenceNames = new Set(currentSchema.sequences.map((s) => s.name));
   for (const sequence of deployedSchema.sequences) {

@@ -269,6 +269,28 @@ describe("planSqlDeployment", () => {
     );
   });
 
+  it("plans alter-sequence when an existing sequence's start/increment changes", () => {
+    const deployed = shopModel();
+    deployed.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];
+    const current = {
+      ...deployed,
+      sequences: [{ id: "s1", name: "order_seq", start: 100, increment: 5 }],
+    };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const step = plan.steps.find((s) => s.target === "order_seq");
+    expect(step?.action).toBe("alter-sequence");
+    expect(step?.sql).toContain("ALTER SEQUENCE");
+    expect(step?.sql).toContain("INCREMENT BY 5");
+    expect(step?.sql).toContain("RESTART WITH 100");
+  });
+
+  it("plans nothing for a sequence whose start/increment is unchanged", () => {
+    const model = shopModel();
+    model.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];
+    const plan = planSqlDeployment(model, model, dialect);
+    expect(plan.steps.some((s) => s.target === "order_seq")).toBe(false);
+  });
+
   it("plans a drop-then-create-view when a View's query changes", () => {
     const deployed = shopModel();
     deployed.views = [{ id: "v1", name: "active_orders", sql: "SELECT * FROM purchase_order" }];
