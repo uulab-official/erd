@@ -214,11 +214,27 @@ export function parseDbml(source: string): Model {
           const nameSetting = settings
             .find((s) => s.toLowerCase().startsWith("name:"))
             ?.slice("name:".length);
+          // DBML's `[type: btree|hash|gin|gist]` (or dbdiagram.io's non-standard
+          // `fulltext`) was previously silently dropped here — the same "unknown
+          // setting, ignored" fallthrough as increment/other column settings, except
+          // this one *is* a Model field (Index.type, wired through the SQL adapter's
+          // DDL and the EntityInspector UI earlier this session). Importing a DBML file
+          // with an explicit index type silently reset it to the default (btree) with
+          // no indication anything was lost.
+          const typeSetting = settings
+            .find((s) => s.toLowerCase().startsWith("type:"))
+            ?.slice("type:".length)
+            .trim()
+            .toLowerCase();
+          const indexType = (["btree", "hash", "gin", "gist", "fulltext"] as const).find(
+            (t) => t === typeSetting,
+          );
           indexes.push({
             id: `${physicalName}.idx.${columns.join("_")}`,
             name: nameSetting ? unquote(nameSetting) : `idx_${physicalName}_${columns.join("_")}`,
             attributeIds: columns.map((c) => `${physicalName}.${c}`),
             unique: settings.some((s) => s.toLowerCase() === "unique"),
+            ...(indexType ? { type: indexType } : {}),
           });
         }
         continue;
