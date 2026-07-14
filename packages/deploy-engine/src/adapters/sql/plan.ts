@@ -27,22 +27,40 @@ export function planSqlDeployment(
 
   const deployedByName = new Map(deployedSchema.tables.map((t) => [t.name, t]));
 
-  const deployedSequenceNames = new Set(deployedSchema.sequences.map((s) => s.name));
+  const deployedSequenceByName = new Map(deployedSchema.sequences.map((s) => [s.name, s]));
   for (const sequence of currentSchema.sequences) {
-    if (deployedSequenceNames.has(sequence.name)) continue;
-    const step: MigrationStep = {
-      action: "create-sequence",
-      target: sequence.name,
-      sql: dialect.createSequenceDDL(sequence),
-      destructive: false,
-    };
-    // supportsSequences === false means createSequenceDDL returned "" above — don't
-    // guess at MySQL/SQLite syntax for a concept they have no native equivalent of, the
-    // same policy already used for SQLite's FK-ALTER limitation.
-    if (!dialect.supportsSequences) {
-      step.warning = `${dialect.name} has no native sequence object — model auto-increment on the column itself instead, or manage this sequence outside ModelForge.`;
+    const existingSequence = deployedSequenceByName.get(sequence.name);
+    if (!existingSequence) {
+      const step: MigrationStep = {
+        action: "create-sequence",
+        target: sequence.name,
+        sql: dialect.createSequenceDDL(sequence),
+        destructive: false,
+      };
+      // supportsSequences === false means createSequenceDDL returned "" above — don't
+      // guess at MySQL/SQLite syntax for a concept they have no native equivalent of, the
+      // same policy already used for SQLite's FK-ALTER limitation.
+      if (!dialect.supportsSequences) {
+        step.warning = `${dialect.name} has no native sequence object — model auto-increment on the column itself instead, or manage this sequence outside ModelForge.`;
+      }
+      steps.push(step);
+    } else if (
+      dialect.supportsSequences &&
+      (existingSequence.start !== sequence.start ||
+        existingSequence.increment !== sequence.increment)
+    ) {
+      // Same "matched by name alone treated a redefinition as already-deployed" gap as
+      // the index/FK cases above — a Sequence's start/increment can change via
+      // updateSequence (Governance panel) without touching its name, so name-only
+      // matching silently no-op'd the edit at deploy time. Unlike Index/FK, PostgreSQL
+      // can express this in place via ALTER SEQUENCE, so no drop+recreate is needed here.
+      steps.push({
+        action: "alter-sequence",
+        target: sequence.name,
+        sql: `ALTER SEQUENCE ${q(sequence.name)} INCREMENT BY ${sequence.increment} RESTART WITH ${sequence.start};`,
+        destructive: false,
+      });
     }
-    steps.push(step);
   }
   const currentSequenceNames = new Set(currentSchema.sequences.map((s) => s.name));
   for (const sequence of deployedSchema.sequences) {
@@ -206,14 +224,76 @@ export function planSqlDeployment(
       }
     }
 
+    // Which column(s) form the primary key lives on the table (SqlTableDef.primaryKey),
+    // not on any individual SqlColumnDef — so the column diffing above, which only
+    // compares each column's own fields, never notices a PK membership change (e.g.
+    // switching the PK from one column to another, or making it composite). This was a
+    // total blind spot: unlike Index/FK/Sequence above (which at least matched by name),
+    // there was no per-table identity to match on at all, so this case was completely
+    // unchecked rather than merely mismatched.
+    const currentPrimaryKey = [...table.primaryKey].sort();
+    const deployedPrimaryKey = [...deployed.primaryKey].sort();
+    if (JSON.stringify(currentPrimaryKey) !== JSON.stringify(deployedPrimaryKey)) {
+      if (dialect.name === "postgresql") {
+        // createTableDDL never gives the PRIMARY KEY constraint an explicit name, so
+        // PostgreSQL assigns its default "{table}_pkey" — safe to assume here since
+        // nothing in this codebase ever renames it.
+        steps.push({
+          action: "alter-attribute",
+          target: table.name,
+          sql:
+            currentPrimaryKey.length > 0
+              ? `ALTER TABLE ${q(table.name)} DROP CONSTRAINT ${q(`${table.name}_pkey`)}, ADD PRIMARY KEY (${table.primaryKey.map(q).join(", ")});`
+              : `ALTER TABLE ${q(table.name)} DROP CONSTRAINT ${q(`${table.name}_pkey`)};`,
+          destructive: false,
+          warning:
+            "The primary key changed — this assumes the existing constraint still uses PostgreSQL's default name; adjust manually if it was ever renamed outside ModelForge.",
+        });
+      } else if (dialect.name === "mysql") {
+        steps.push({
+          action: "alter-attribute",
+          target: table.name,
+          sql:
+            currentPrimaryKey.length > 0
+              ? `ALTER TABLE ${q(table.name)} DROP PRIMARY KEY, ADD PRIMARY KEY (${table.primaryKey.map(q).join(", ")});`
+              : `ALTER TABLE ${q(table.name)} DROP PRIMARY KEY;`,
+          destructive: false,
+        });
+      } else {
+        steps.push({
+          action: "alter-attribute",
+          target: table.name,
+          destructive: false,
+          warning: `${dialect.name} does not support altering a table's primary key — recreate "${table.name}" to change it.`,
+        });
+      }
+    }
+
     const deployedIndexes = new Map(deployed.indexes.map((i) => [i.name, i]));
     for (const index of table.indexes) {
-      if (!deployedIndexes.has(index.name)) {
+      const existingIndex = deployedIndexes.get(index.name);
+      if (!existingIndex) {
         steps.push({
           action: "create-index",
           target: `${table.name}.${index.name}`,
           sql: dialect.createIndexDDL(index, table.name),
           destructive: false,
+        });
+      } else if (JSON.stringify(existingIndex) !== JSON.stringify(index)) {
+        // An index's columns/unique/method are baked into its CREATE INDEX statement, not
+        // alterable in place in any of the three dialects — matching-by-name alone (as
+        // this loop did before) silently treated a redefined index (same name, different
+        // columns/unique/method — the UI's only way to "edit" an index is delete+recreate
+        // with the same name) as already-deployed, so the actual index in the database
+        // never changed even though the Deploy Plan showed nothing to do. Same "drop and
+        // recreate rather than guess at in-place ALTER syntax" policy as the View case
+        // above.
+        steps.push({
+          action: "create-index",
+          target: `${table.name}.${index.name}`,
+          sql: `DROP INDEX ${q(index.name)};\n${dialect.createIndexDDL(index, table.name)}`,
+          destructive: false,
+          warning: "The index's definition changed — this drops and recreates it",
         });
       }
     }
@@ -231,7 +311,8 @@ export function planSqlDeployment(
 
     const deployedFks = new Map(deployed.foreignKeys.map((fk) => [fk.name, fk]));
     for (const fk of table.foreignKeys) {
-      if (!deployedFks.has(fk.name)) {
+      const existingFk = deployedFks.get(fk.name);
+      if (!existingFk) {
         steps.push(
           dialect.supportsAlterForeignKey
             ? {
@@ -245,6 +326,28 @@ export function planSqlDeployment(
                 target: `${table.name}.${fk.name}`,
                 destructive: false,
                 warning: `${dialect.name} does not support adding foreign keys via ALTER TABLE — recreate "${table.name}" to add this constraint`,
+              },
+        );
+      } else if (JSON.stringify(existingFk) !== JSON.stringify(fk)) {
+        // Same "matched by name alone treated a redefinition as already-deployed" gap as
+        // the index case above — the FK's name is derived from the table + relationship
+        // id/name, so editing e.g. onDelete/onUpdate via the Relationship Inspector (no
+        // rename involved) kept matching the deployed constraint by name and never
+        // re-emitted it, leaving the real database's constraint exactly as it was.
+        steps.push(
+          dialect.supportsAlterForeignKey
+            ? {
+                action: "create-relationship",
+                target: `${table.name}.${fk.name}`,
+                sql: `ALTER TABLE ${q(table.name)} DROP CONSTRAINT ${q(fk.name)};\n${dialect.foreignKeyDDL(fk, table.name)}`,
+                destructive: false,
+                warning: "The foreign key's definition changed — this drops and recreates it",
+              }
+            : {
+                action: "create-relationship",
+                target: `${table.name}.${fk.name}`,
+                destructive: false,
+                warning: `${dialect.name} does not support altering foreign keys via ALTER TABLE — recreate "${table.name}" to apply this change`,
               },
         );
       }

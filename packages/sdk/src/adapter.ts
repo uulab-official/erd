@@ -15,6 +15,7 @@ export interface MigrationStep {
     | "create-relationship"
     | "drop-relationship"
     | "create-sequence"
+    | "alter-sequence"
     | "drop-sequence"
     | "create-view"
     | "drop-view";

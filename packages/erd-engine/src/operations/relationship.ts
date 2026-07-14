@@ -39,6 +39,26 @@ export function createRelationship(
       throw new Error(`Relationship references unknown entity "${entityId}"`);
     }
   }
+  const sourceEntity = model.entities.find((e) => e.id === relationship.sourceEntityId);
+  const targetEntity = model.entities.find((e) => e.id === relationship.targetEntityId);
+  const sourceAttributeIds = new Set(sourceEntity?.attributes.map((a) => a.id));
+  const targetAttributeIds = new Set(targetEntity?.attributes.map((a) => a.id));
+  const badSourceAttributeId = relationship.sourceAttributeIds.find(
+    (id) => !sourceAttributeIds.has(id),
+  );
+  if (badSourceAttributeId !== undefined) {
+    throw new Error(
+      `Relationship "${relationship.id}" references source attribute "${badSourceAttributeId}", which does not belong to entity "${relationship.sourceEntityId}"`,
+    );
+  }
+  const badTargetAttributeId = relationship.targetAttributeIds.find(
+    (id) => !targetAttributeIds.has(id),
+  );
+  if (badTargetAttributeId !== undefined) {
+    throw new Error(
+      `Relationship "${relationship.id}" references target attribute "${badTargetAttributeId}", which does not belong to entity "${relationship.targetEntityId}"`,
+    );
+  }
   const insertAt = index ?? model.relationships.length;
   const nextModel: Model = {
     ...model,

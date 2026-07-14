@@ -218,6 +218,38 @@ function checkDuplicateIndexes(model: Model): ValidationIssue[] {
   return issues;
 }
 
+// createIndex/updateIndex (erd-engine) never validate that an Index's attributeIds
+// actually resolve to attributes on its *own* Entity — nothing stops an attributeId
+// that's dangling (points at nothing, e.g. a stale id from a hand-edited import) or
+// that belongs to a completely different Entity. toNativeSchema's index rendering
+// resolves each attributeId via `entity.attributes.find(...).filter(Boolean)`, so a
+// bad id is silently dropped from the column list instead of erroring — a two-column
+// index quietly becomes a one-column index (or, if every id is bad, an empty-column
+// index that would fail outright at `CREATE INDEX name ON table ()`). Same "resolved
+// with .find().filter(Boolean) instead of validated" shape as the FK column resolution
+// above, just for Index.attributeIds instead of Relationship attribute ids.
+function checkIndexAttributeReferences(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  for (const entity of model.entities) {
+    const ownAttributeIds = new Set(entity.attributes.map((a) => a.id));
+
+    for (const index of entity.indexes) {
+      const danglingIds = index.attributeIds.filter((id) => !ownAttributeIds.has(id));
+      if (danglingIds.length > 0) {
+        issues.push({
+          severity: "error",
+          code: "index-attribute-not-found",
+          message: `Index "${index.name}" on entity "${entity.logicalName}" references an attribute that doesn't belong to this entity — it would be silently dropped from the index's column list at deploy.`,
+          entityId: entity.id,
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
 function checkReservedWords(model: Model, reservedWords: string[]): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const reserved = new Set(reservedWords.map((w) => w.toLowerCase()));
@@ -567,6 +599,66 @@ function checkDuplicateGovernanceNames(model: Model): ValidationIssue[] {
   return issues;
 }
 
+// assignEntityToSubjectArea/unassignEntityFromSubjectArea (erd-engine) always write
+// Entity.subjectAreaId and SubjectArea.entityIds together, and deleteEntityCascade
+// unassigns an Entity from its Subject Area before removing it — so this two-way
+// membership invariant should never drift as long as only Operations touch the Model.
+// But nothing has ever verified that a Model that arrived a different way (hand-edited
+// JSON, an older export, a future Operation bug) actually satisfies it. A break here
+// isn't a deploy-time SQL failure like the checks above — Subject Areas are a
+// canvas/diagram-only concept, not deployed — but it does corrupt the UI: a dangling
+// entityId defensively renders around a missing Entity (ErdCanvas, SVG exporter both
+// already filter it out), and, as found earlier this session, it can leave the
+// Governance panel's "Delete Subject Area" button permanently disabled because the
+// (dead) entityIds never seems empty.
+function checkSubjectAreaEntityConsistency(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const entitiesById = new Map(model.entities.map((e) => [e.id, e]));
+  const subjectAreasById = new Map((model.subjectAreas ?? []).map((s) => [s.id, s]));
+
+  for (const subjectArea of model.subjectAreas ?? []) {
+    for (const entityId of subjectArea.entityIds) {
+      const entity = entitiesById.get(entityId);
+      if (!entity) {
+        issues.push({
+          severity: "error",
+          code: "subject-area-entity-not-found",
+          message: `Subject Area "${subjectArea.name}" references an entity that no longer exists.`,
+        });
+      } else if (entity.subjectAreaId !== subjectArea.id) {
+        issues.push({
+          severity: "error",
+          code: "subject-area-membership-mismatch",
+          message: `Subject Area "${subjectArea.name}" lists entity "${entity.logicalName}", but that entity's own subjectAreaId doesn't point back to it.`,
+          entityId: entity.id,
+        });
+      }
+    }
+  }
+
+  for (const entity of model.entities) {
+    if (!entity.subjectAreaId) continue;
+    const subjectArea = subjectAreasById.get(entity.subjectAreaId);
+    if (!subjectArea) {
+      issues.push({
+        severity: "error",
+        code: "subject-area-entity-not-found",
+        message: `Entity "${entity.logicalName}" is assigned to a Subject Area that no longer exists.`,
+        entityId: entity.id,
+      });
+    } else if (!subjectArea.entityIds.includes(entity.id)) {
+      issues.push({
+        severity: "error",
+        code: "subject-area-membership-mismatch",
+        message: `Entity "${entity.logicalName}" points at Subject Area "${subjectArea.name}", but that Subject Area doesn't list it back.`,
+        entityId: entity.id,
+      });
+    }
+  }
+
+  return issues;
+}
+
 // checkDictionaryTerms (above) looks up a word's standard spelling via
 // `new Map(entries.map((e) => [e.logicalTerm.toLowerCase(), e.standardName]))` — two
 // DictionaryEntry objects sharing a logicalTerm (case-insensitively, matching that Map's
@@ -601,22 +693,59 @@ function checkDuplicateDictionaryTerms(model: Model): ValidationIssue[] {
 // silently excludes it from Deploy Plan, so a blanked-out View disappears with no trail.
 //
 // Beyond same-kind duplicates, PostgreSQL shares one relation namespace across tables,
-// views, and sequences within a schema — a Sequence or View named the same as an Entity's
-// physicalName (or as an already-claimed Sequence/View) makes `CREATE SEQUENCE`/
-// `CREATE VIEW` collide with that existing relation, failing outright at deploy. Neither
-// createSequence/createView (database.ts) nor this function previously checked across
-// object kinds, only within one — the same class of gap as
-// checkRelationshipAttributeTypeMismatch/the enum-default checks above, just at the
-// object-name level instead of the attribute level.
+// views, sequences, AND indexes within a schema (an index is itself a relation there,
+// same as a table/view/sequence) — a Sequence, View, or Index named the same as an
+// Entity's physicalName (or as an already-claimed object of any of these kinds) makes its
+// CREATE statement collide with that existing relation, failing outright at deploy.
+// checkDuplicateIndexes (above) only ever compared an Index's name against other Indexes
+// on the *same* Entity — two different Entities each having an index literally named
+// "idx_email" passed every existing check, yet PostgreSQL would reject the second
+// CREATE INDEX outright. Neither createSequence/createView (database.ts) nor this
+// function previously checked across object kinds or across Entities, only within one —
+// the same class of gap as checkRelationshipAttributeTypeMismatch/the enum-default checks
+// above, just at the object-name level instead of the attribute level.
 function checkDatabaseObjects(model: Model): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
 
   // Tracks every name already claimed by an earlier-processed kind, purely for the
   // cross-kind collision message — same-kind duplicates are reported separately below via
-  // seenSequenceNames/seenViewNames so a single colliding pair doesn't get double-flagged.
+  // seenSequenceNames/seenViewNames/seenIndexNames so a single colliding pair doesn't get
+  // double-flagged.
   const claimedBy = new Map<string, string>();
+  // Maps an index name to the id of the entity that first declared it — lets a second
+  // index of the same name on a *different* entity be flagged as a cross-entity
+  // collision, while a same-entity duplicate (already reported by checkDuplicateIndexes'
+  // "duplicate-index-name") is left alone here to avoid double-reporting.
+  const indexNameOwner = new Map<string, string>();
   for (const entity of model.entities) {
     claimedBy.set(entity.physicalName, `table "${entity.physicalName}"`);
+
+    for (const index of entity.indexes) {
+      const owner = indexNameOwner.get(index.name);
+      if (owner !== undefined) {
+        if (owner !== entity.id) {
+          issues.push({
+            severity: "error",
+            code: "duplicate-index-name-across-entities",
+            message: `Index "${index.name}" on entity "${entity.logicalName}" has the same name as an index on a different entity — PostgreSQL indexes share the schema's relation namespace, so the second CREATE INDEX would fail.`,
+            entityId: entity.id,
+          });
+        }
+        continue;
+      }
+
+      const collidesWith = claimedBy.get(index.name);
+      if (collidesWith) {
+        issues.push({
+          severity: "error",
+          code: "database-object-name-collision",
+          message: `Index "${index.name}" on entity "${entity.logicalName}" shares its name with ${collidesWith} — PostgreSQL shares one namespace for tables/views/sequences/indexes, so CREATE INDEX would collide with it.`,
+          entityId: entity.id,
+        });
+      }
+      indexNameOwner.set(index.name, entity.id);
+      claimedBy.set(index.name, `index "${index.name}"`);
+    }
   }
 
   const seenSequenceNames = new Set<string>();
@@ -754,6 +883,52 @@ function checkRelationshipAttributeTypeMismatch(model: Model): ValidationIssue[]
   return issues;
 }
 
+// createRelationship (erd-engine) now guards against a *newly created* Relationship
+// referencing an attribute id that doesn't belong to its own source/target entity, but a
+// Model that already has this defect (hand-edited, or built by a future importer bug)
+// has no way to surface it — checkRelationshipAttributeTypeMismatch above explicitly
+// skips a dangling reference ("if (!sourceAttr || !targetAttr ...) continue"), since a
+// missing attribute isn't a type mismatch, it's a different problem. Same "resolved with
+// .find() instead of validated" shape as the Index attributeIds check above, just for
+// Relationship source/targetAttributeIds instead of Index.attributeIds — the SQL
+// adapter's FK column resolution (toNativeSchema.ts) silently drops a dangling id from
+// the FK's column list instead of erroring, producing a foreign key with fewer columns
+// than the Relationship models, or none at all.
+function checkRelationshipAttributeReferences(model: Model): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const entitiesById = new Map(model.entities.map((e) => [e.id, e]));
+
+  for (const rel of model.relationships) {
+    const source = entitiesById.get(rel.sourceEntityId);
+    if (source) {
+      const ownIds = new Set(source.attributes.map((a) => a.id));
+      if (rel.sourceAttributeIds.some((id) => !ownIds.has(id))) {
+        issues.push({
+          severity: "error",
+          code: "relationship-attribute-not-found",
+          message: `Relationship "${rel.name ?? rel.id}" references a source attribute that doesn't belong to "${source.logicalName}" — it would be silently dropped from the foreign key at deploy.`,
+          entityId: source.id,
+        });
+      }
+    }
+
+    const target = entitiesById.get(rel.targetEntityId);
+    if (target) {
+      const ownIds = new Set(target.attributes.map((a) => a.id));
+      if (rel.targetAttributeIds.some((id) => !ownIds.has(id))) {
+        issues.push({
+          severity: "error",
+          code: "relationship-attribute-not-found",
+          message: `Relationship "${rel.name ?? rel.id}" references a target attribute that doesn't belong to "${target.logicalName}" — it would be silently dropped from the foreign key at deploy.`,
+          entityId: target.id,
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
 // Structural invariants from /docs/schema-engine.md. Extend as new rules land.
 //
 // `reservedWords` is an explicit override for callers that want to check against a
@@ -769,15 +944,18 @@ export function validateModel(model: Model, reservedWords?: string[]): Validatio
     ...checkStructural(model),
     ...checkAttributeDefaultTypeMismatch(model),
     ...checkDuplicateIndexes(model),
+    ...checkIndexAttributeReferences(model),
     ...checkReservedWords(model, effectiveReservedWords),
     ...checkCircularIdentifyingRelationships(model),
     ...checkRelationshipAttributeTypeMismatch(model),
+    ...checkRelationshipAttributeReferences(model),
     ...checkNamingConventions(model),
     ...checkAbbreviations(model),
     ...checkDictionaryTerms(model),
     ...checkDomainDrift(model),
     ...checkEnumIntegrity(model),
     ...checkDuplicateGovernanceNames(model),
+    ...checkSubjectAreaEntityConsistency(model),
     ...checkDuplicateDictionaryTerms(model),
     ...checkDatabaseObjects(model),
   ];

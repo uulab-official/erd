@@ -283,6 +283,169 @@ describe("validateModel", () => {
     ).toBe(false);
   });
 
+  it("flags a relationship whose attribute ids are dangling references", () => {
+    const model = emptyModel();
+    model.entities.push(
+      {
+        id: "e1",
+        logicalName: "Customer",
+        physicalName: "customer",
+        tags: [],
+        attributes: [],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+      {
+        id: "e2",
+        logicalName: "Purchase",
+        physicalName: "purchase",
+        tags: [],
+        attributes: [],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+    );
+    model.relationships.push({
+      id: "r1",
+      sourceEntityId: "e1",
+      targetEntityId: "e2",
+      cardinality: "one-to-many",
+      kind: "non-identifying",
+      optionality: "mandatory",
+      sourceAttributeIds: ["missing-source"],
+      targetAttributeIds: ["missing-target"],
+    });
+
+    const issues = validateModel(model);
+    expect(issues.filter((i) => i.code === "relationship-attribute-not-found")).toHaveLength(2);
+  });
+
+  it("flags a relationship whose source attribute belongs to a different entity", () => {
+    const model = emptyModel();
+    model.entities.push(
+      {
+        id: "e1",
+        logicalName: "Customer",
+        physicalName: "customer",
+        tags: [],
+        attributes: [
+          {
+            id: "a1",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+      {
+        id: "e2",
+        logicalName: "Purchase",
+        physicalName: "purchase",
+        tags: [],
+        attributes: [
+          {
+            id: "a2",
+            name: "customer_id",
+            logicalName: "Customer ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: false,
+            isForeignKey: true,
+            isUnique: false,
+          },
+        ],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+    );
+    model.relationships.push({
+      id: "r1",
+      sourceEntityId: "e1",
+      targetEntityId: "e2",
+      cardinality: "one-to-many",
+      kind: "non-identifying",
+      optionality: "mandatory",
+      // "a2" belongs to e2 (the target), not e1 (the source).
+      sourceAttributeIds: ["a2"],
+      targetAttributeIds: ["a2"],
+    });
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        code: "relationship-attribute-not-found",
+        severity: "error",
+        entityId: "e1",
+      }),
+    );
+  });
+
+  it("does not flag a relationship whose attribute ids all belong to their own entity", () => {
+    const model = emptyModel();
+    model.entities.push(
+      {
+        id: "e1",
+        logicalName: "Customer",
+        physicalName: "customer",
+        tags: [],
+        attributes: [
+          {
+            id: "a1",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+      {
+        id: "e2",
+        logicalName: "Purchase",
+        physicalName: "purchase",
+        tags: [],
+        attributes: [
+          {
+            id: "a2",
+            name: "customer_id",
+            logicalName: "Customer ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: false,
+            isForeignKey: true,
+            isUnique: false,
+          },
+        ],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+    );
+    model.relationships.push({
+      id: "r1",
+      sourceEntityId: "e1",
+      targetEntityId: "e2",
+      cardinality: "one-to-many",
+      kind: "non-identifying",
+      optionality: "mandatory",
+      sourceAttributeIds: ["a1"],
+      targetAttributeIds: ["a2"],
+    });
+
+    expect(validateModel(model).map((i) => i.code)).not.toContain(
+      "relationship-attribute-not-found",
+    );
+  });
+
   it("flags a duplicate index name", () => {
     const model = emptyModel();
     model.entities.push({
@@ -320,6 +483,114 @@ describe("validateModel", () => {
     });
 
     expect(validateModel(model).map((i) => i.code)).toContain("duplicate-index-name");
+  });
+
+  it("flags an index referencing an attribute id from a different entity", () => {
+    const model = emptyModel();
+    model.entities.push(
+      {
+        id: "e1",
+        logicalName: "Customer",
+        physicalName: "customer",
+        tags: [],
+        attributes: [
+          {
+            id: "a1",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        // References "a2", which belongs to entity e2 below, not this entity.
+        indexes: [{ id: "i1", name: "idx_bad", attributeIds: ["a2"], unique: false }],
+        ui: { x: 0, y: 0 },
+      },
+      {
+        id: "e2",
+        logicalName: "Order",
+        physicalName: "order",
+        tags: [],
+        attributes: [
+          {
+            id: "a2",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+    );
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        code: "index-attribute-not-found",
+        severity: "error",
+        entityId: "e1",
+      }),
+    );
+  });
+
+  it("flags an index referencing a dangling attribute id", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [{ id: "i1", name: "idx_bad", attributeIds: ["missing-id"], unique: false }],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).toContain("index-attribute-not-found");
+  });
+
+  it("does not flag an index whose attributeIds all belong to its own entity", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [{ id: "i1", name: "idx_ok", attributeIds: ["a1"], unique: false }],
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).not.toContain("index-attribute-not-found");
   });
 
   it("flags two indexes covering the same columns", () => {
@@ -1123,6 +1394,66 @@ describe("validateModel", () => {
     expect(codes).not.toContain("duplicate-subject-area-name");
   });
 
+  it("flags a Subject Area referencing an entity that no longer exists", () => {
+    const model = emptyModel();
+    model.subjectAreas = [{ id: "sa1", name: "Sales", entityIds: ["missing-entity"] }];
+
+    expect(validateModel(model).map((i) => i.code)).toContain("subject-area-entity-not-found");
+  });
+
+  it("flags an Entity whose subjectAreaId points at a Subject Area that no longer exists", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [],
+      indexes: [],
+      subjectAreaId: "missing-subject-area",
+      ui: { x: 0, y: 0 },
+    });
+
+    expect(validateModel(model).map((i) => i.code)).toContain("subject-area-entity-not-found");
+  });
+
+  it("flags a two-way mismatch between Entity.subjectAreaId and SubjectArea.entityIds", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [],
+      indexes: [],
+      // Points at sa1, but sa1.entityIds (below) doesn't list "e1" back.
+      subjectAreaId: "sa1",
+      ui: { x: 0, y: 0 },
+    });
+    model.subjectAreas = [{ id: "sa1", name: "Sales", entityIds: [] }];
+
+    expect(validateModel(model).map((i) => i.code)).toContain("subject-area-membership-mismatch");
+  });
+
+  it("does not flag a consistent Entity/Subject Area membership", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [],
+      indexes: [],
+      subjectAreaId: "sa1",
+      ui: { x: 0, y: 0 },
+    });
+    model.subjectAreas = [{ id: "sa1", name: "Sales", entityIds: ["e1"] }];
+
+    const codes = validateModel(model).map((i) => i.code);
+    expect(codes).not.toContain("subject-area-entity-not-found");
+    expect(codes).not.toContain("subject-area-membership-mismatch");
+  });
+
   it("flags duplicate dictionary terms, case-insensitively", () => {
     const model = emptyModel();
     model.dictionary = [
@@ -1229,6 +1560,153 @@ describe("validateModel", () => {
     ];
     const codes = validateModel(model).map((i) => i.code);
     expect(codes.filter((c) => c === "duplicate-sequence-name")).toHaveLength(1);
+    expect(codes).not.toContain("database-object-name-collision");
+  });
+
+  it("flags two different entities sharing an index name", () => {
+    const model = emptyModel();
+    model.entities.push(
+      {
+        id: "e1",
+        logicalName: "Customer",
+        physicalName: "customer",
+        tags: [],
+        attributes: [
+          {
+            id: "a1",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        indexes: [{ id: "i1", name: "idx_email", attributeIds: ["a1"], unique: false }],
+        ui: { x: 0, y: 0 },
+      },
+      {
+        id: "e2",
+        logicalName: "Order",
+        physicalName: "order",
+        tags: [],
+        attributes: [
+          {
+            id: "a2",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        indexes: [{ id: "i2", name: "idx_email", attributeIds: ["a2"], unique: false }],
+        ui: { x: 0, y: 0 },
+      },
+    );
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        code: "duplicate-index-name-across-entities",
+        severity: "error",
+        entityId: "e2",
+      }),
+    );
+  });
+
+  it("flags an Index sharing a name with an Entity's physical table name", () => {
+    const model = emptyModel();
+    model.entities.push(
+      {
+        id: "e1",
+        logicalName: "Orders",
+        physicalName: "orders",
+        tags: [],
+        attributes: [
+          {
+            id: "a1",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        indexes: [],
+        ui: { x: 0, y: 0 },
+      },
+      {
+        id: "e2",
+        logicalName: "Customer",
+        physicalName: "customer",
+        tags: [],
+        attributes: [
+          {
+            id: "a2",
+            name: "id",
+            logicalName: "ID",
+            type: "uuid",
+            nullable: false,
+            isPrimaryKey: true,
+            isForeignKey: false,
+            isUnique: true,
+          },
+        ],
+        indexes: [{ id: "i1", name: "orders", attributeIds: ["a2"], unique: false }],
+        ui: { x: 0, y: 0 },
+      },
+    );
+
+    const issues = validateModel(model);
+    expect(issues).toContainEqual(
+      expect.objectContaining({ code: "database-object-name-collision", severity: "error" }),
+    );
+  });
+
+  it("does not double-report a same-entity duplicate index name as a cross-entity collision", () => {
+    const model = emptyModel();
+    model.entities.push({
+      id: "e1",
+      logicalName: "Customer",
+      physicalName: "customer",
+      tags: [],
+      attributes: [
+        {
+          id: "a1",
+          name: "id",
+          logicalName: "ID",
+          type: "uuid",
+          nullable: false,
+          isPrimaryKey: true,
+          isForeignKey: false,
+          isUnique: true,
+        },
+        {
+          id: "a2",
+          name: "email",
+          logicalName: "Email",
+          type: "string",
+          nullable: false,
+          isPrimaryKey: false,
+          isForeignKey: false,
+          isUnique: true,
+        },
+      ],
+      indexes: [
+        { id: "i1", name: "idx_dup", attributeIds: ["a1"], unique: false },
+        { id: "i2", name: "idx_dup", attributeIds: ["a2"], unique: false },
+      ],
+      ui: { x: 0, y: 0 },
+    });
+
+    const codes = validateModel(model).map((i) => i.code);
+    expect(codes).not.toContain("duplicate-index-name-across-entities");
     expect(codes).not.toContain("database-object-name-collision");
   });
 });

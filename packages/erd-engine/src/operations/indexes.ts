@@ -41,6 +41,13 @@ export function createIndex(
   if (entity.indexes.some((i) => i.id === payload.index.id)) {
     throw new Error(`Index "${payload.index.id}" already exists on entity "${entity.id}"`);
   }
+  const ownAttributeIds = new Set(entity.attributes.map((a) => a.id));
+  const foreignAttributeId = payload.index.attributeIds.find((id) => !ownAttributeIds.has(id));
+  if (foreignAttributeId !== undefined) {
+    throw new Error(
+      `Index "${payload.index.id}" references attribute "${foreignAttributeId}", which does not belong to entity "${entity.id}"`,
+    );
+  }
   const nextModel = updateEntityIndexes(model, entity.id, (indexes) => {
     const insertAt = payload.position ?? indexes.length;
     return [...indexes.slice(0, insertAt), payload.index, ...indexes.slice(insertAt)];

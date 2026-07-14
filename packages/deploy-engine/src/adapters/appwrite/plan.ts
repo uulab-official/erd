@@ -69,7 +69,28 @@ export function planAppwriteDeployment(
 
     const deployedIndexes = new Map(deployed.indexes.map((i) => [i.key, i]));
     for (const index of collection.indexes) {
-      if (!deployedIndexes.has(index.key)) {
+      const existingIndex = deployedIndexes.get(index.key);
+      if (!existingIndex) {
+        steps.push({
+          action: "create-index",
+          target: `${collection.id}.${index.key}`,
+          appwriteCall: index,
+          destructive: false,
+        });
+      } else if (JSON.stringify(existingIndex) !== JSON.stringify(index)) {
+        // Appwrite has no "update index" call — its API only creates and deletes
+        // indexes, so a redefined index (same key, different attributes/type/orders —
+        // the UI's only way to "edit" an index is delete+recreate with the same name)
+        // was previously invisible here: matching by key alone treated it as
+        // already-deployed and never re-pushed the new definition. Emit an explicit
+        // drop before the create, mirroring the SQL adapter's drop-then-recreate policy
+        // for a redefined index/view.
+        steps.push({
+          action: "drop-index",
+          target: `${collection.id}.${index.key}`,
+          destructive: true,
+          warning: "The index's definition changed — this drops and recreates it",
+        });
         steps.push({
           action: "create-index",
           target: `${collection.id}.${index.key}`,

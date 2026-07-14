@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createPostgresDialect } from "./dialect.js";
 import { createMySqlDialect } from "./mysql.js";
 import { planSqlDeployment, rollbackSqlPlan } from "./plan.js";
-import { customerEntity, orderEntity, shopModel } from "./test-fixtures.js";
+import { customerEntity, orderEntity, placesRelationship, shopModel } from "./test-fixtures.js";
 import type { Model } from "@modelforge/schema-engine";
 
 const dialect = createPostgresDialect();
@@ -220,6 +220,28 @@ describe("planSqlDeployment", () => {
     expect(emailStep?.warning).toMatch(/UNIQUE constraint.*isn't captured/i);
   });
 
+  it("plans a drop-then-recreate foreign key when an existing FK's definition changes (e.g. onDelete)", () => {
+    const deployed = shopModel();
+    const current: Model = {
+      ...deployed,
+      relationships: [{ ...placesRelationship(), onDelete: "set-null" }],
+    };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const step = plan.steps.find((s) => s.target === "purchase_order.fk_purchase_order_places");
+    expect(step?.action).toBe("create-relationship");
+    expect(step?.sql).toContain("DROP CONSTRAINT");
+    expect(step?.sql).toContain("ADD CONSTRAINT");
+    expect(step?.warning).toMatch(/foreign key's definition changed/i);
+  });
+
+  it("plans nothing for a foreign key whose definition is unchanged", () => {
+    const model = shopModel();
+    const plan = planSqlDeployment(model, model, dialect);
+    expect(plan.steps.some((s) => s.target === "purchase_order.fk_purchase_order_places")).toBe(
+      false,
+    );
+  });
+
   it("plans create-sequence/create-view when a Sequence/View is added", () => {
     const model = shopModel();
     model.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];
@@ -247,6 +269,57 @@ describe("planSqlDeployment", () => {
     );
   });
 
+  it("plans an ALTER TABLE DROP+ADD CONSTRAINT when the primary key column changes", () => {
+    const deployed = shopModel();
+    const current: Model = {
+      ...deployed,
+      entities: [
+        {
+          ...customerEntity(),
+          attributes: customerEntity().attributes.map((a) => ({
+            ...a,
+            isPrimaryKey: a.name === "email",
+          })),
+        },
+        deployed.entities[1]!,
+      ],
+    };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const step = plan.steps.find((s) => s.target === "customer" && s.action === "alter-attribute");
+    expect(step?.sql).toContain("DROP CONSTRAINT");
+    expect(step?.sql).toContain('"customer_pkey"');
+    expect(step?.sql).toContain('ADD PRIMARY KEY ("email")');
+    expect(step?.warning).toMatch(/primary key changed/i);
+  });
+
+  it("plans nothing for a table whose primary key is unchanged", () => {
+    const model = shopModel();
+    const plan = planSqlDeployment(model, model, dialect);
+    expect(plan.steps.some((s) => s.target === "customer")).toBe(false);
+  });
+
+  it("plans alter-sequence when an existing sequence's start/increment changes", () => {
+    const deployed = shopModel();
+    deployed.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];
+    const current = {
+      ...deployed,
+      sequences: [{ id: "s1", name: "order_seq", start: 100, increment: 5 }],
+    };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const step = plan.steps.find((s) => s.target === "order_seq");
+    expect(step?.action).toBe("alter-sequence");
+    expect(step?.sql).toContain("ALTER SEQUENCE");
+    expect(step?.sql).toContain("INCREMENT BY 5");
+    expect(step?.sql).toContain("RESTART WITH 100");
+  });
+
+  it("plans nothing for a sequence whose start/increment is unchanged", () => {
+    const model = shopModel();
+    model.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];
+    const plan = planSqlDeployment(model, model, dialect);
+    expect(plan.steps.some((s) => s.target === "order_seq")).toBe(false);
+  });
+
   it("plans a drop-then-create-view when a View's query changes", () => {
     const deployed = shopModel();
     deployed.views = [{ id: "v1", name: "active_orders", sql: "SELECT * FROM purchase_order" }];
@@ -259,6 +332,35 @@ describe("planSqlDeployment", () => {
     expect(step?.action).toBe("create-view");
     expect(step?.sql).toContain("DROP VIEW");
     expect(step?.sql).toContain("CREATE VIEW");
+  });
+
+  it("plans a drop-then-create-index when an existing index's definition changes", () => {
+    const deployed = shopModel();
+    const current: Model = {
+      ...deployed,
+      entities: [
+        {
+          ...customerEntity(),
+          // Same index id/name as the deployed snapshot, but no longer unique — the
+          // UI's only way to "edit" an index is delete+recreate with the same name, so
+          // this mirrors that path exactly.
+          indexes: [{ ...customerEntity().indexes[0]!, unique: false }],
+        },
+        deployed.entities[1]!,
+      ],
+    };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const step = plan.steps.find((s) => s.target === "customer.email_idx");
+    expect(step?.action).toBe("create-index");
+    expect(step?.sql).toContain("DROP INDEX");
+    expect(step?.sql).toContain("CREATE");
+    expect(step?.warning).toMatch(/index's definition changed/i);
+  });
+
+  it("plans nothing for an index whose definition is unchanged", () => {
+    const model = shopModel();
+    const plan = planSqlDeployment(model, model, dialect);
+    expect(plan.steps.some((s) => s.target === "customer.email_idx")).toBe(false);
   });
 
   it("warns instead of guessing at sequence DDL for a dialect with no native sequence support", () => {
