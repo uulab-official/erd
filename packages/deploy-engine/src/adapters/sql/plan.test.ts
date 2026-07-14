@@ -269,6 +269,35 @@ describe("planSqlDeployment", () => {
     );
   });
 
+  it("plans an ALTER TABLE DROP+ADD CONSTRAINT when the primary key column changes", () => {
+    const deployed = shopModel();
+    const current: Model = {
+      ...deployed,
+      entities: [
+        {
+          ...customerEntity(),
+          attributes: customerEntity().attributes.map((a) => ({
+            ...a,
+            isPrimaryKey: a.name === "email",
+          })),
+        },
+        deployed.entities[1]!,
+      ],
+    };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const step = plan.steps.find((s) => s.target === "customer" && s.action === "alter-attribute");
+    expect(step?.sql).toContain("DROP CONSTRAINT");
+    expect(step?.sql).toContain('"customer_pkey"');
+    expect(step?.sql).toContain('ADD PRIMARY KEY ("email")');
+    expect(step?.warning).toMatch(/primary key changed/i);
+  });
+
+  it("plans nothing for a table whose primary key is unchanged", () => {
+    const model = shopModel();
+    const plan = planSqlDeployment(model, model, dialect);
+    expect(plan.steps.some((s) => s.target === "customer")).toBe(false);
+  });
+
   it("plans alter-sequence when an existing sequence's start/increment changes", () => {
     const deployed = shopModel();
     deployed.sequences = [{ id: "s1", name: "order_seq", start: 1, increment: 1 }];

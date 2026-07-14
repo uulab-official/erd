@@ -224,6 +224,51 @@ export function planSqlDeployment(
       }
     }
 
+    // Which column(s) form the primary key lives on the table (SqlTableDef.primaryKey),
+    // not on any individual SqlColumnDef — so the column diffing above, which only
+    // compares each column's own fields, never notices a PK membership change (e.g.
+    // switching the PK from one column to another, or making it composite). This was a
+    // total blind spot: unlike Index/FK/Sequence above (which at least matched by name),
+    // there was no per-table identity to match on at all, so this case was completely
+    // unchecked rather than merely mismatched.
+    const currentPrimaryKey = [...table.primaryKey].sort();
+    const deployedPrimaryKey = [...deployed.primaryKey].sort();
+    if (JSON.stringify(currentPrimaryKey) !== JSON.stringify(deployedPrimaryKey)) {
+      if (dialect.name === "postgresql") {
+        // createTableDDL never gives the PRIMARY KEY constraint an explicit name, so
+        // PostgreSQL assigns its default "{table}_pkey" — safe to assume here since
+        // nothing in this codebase ever renames it.
+        steps.push({
+          action: "alter-attribute",
+          target: table.name,
+          sql:
+            currentPrimaryKey.length > 0
+              ? `ALTER TABLE ${q(table.name)} DROP CONSTRAINT ${q(`${table.name}_pkey`)}, ADD PRIMARY KEY (${table.primaryKey.map(q).join(", ")});`
+              : `ALTER TABLE ${q(table.name)} DROP CONSTRAINT ${q(`${table.name}_pkey`)};`,
+          destructive: false,
+          warning:
+            "The primary key changed — this assumes the existing constraint still uses PostgreSQL's default name; adjust manually if it was ever renamed outside ModelForge.",
+        });
+      } else if (dialect.name === "mysql") {
+        steps.push({
+          action: "alter-attribute",
+          target: table.name,
+          sql:
+            currentPrimaryKey.length > 0
+              ? `ALTER TABLE ${q(table.name)} DROP PRIMARY KEY, ADD PRIMARY KEY (${table.primaryKey.map(q).join(", ")});`
+              : `ALTER TABLE ${q(table.name)} DROP PRIMARY KEY;`,
+          destructive: false,
+        });
+      } else {
+        steps.push({
+          action: "alter-attribute",
+          target: table.name,
+          destructive: false,
+          warning: `${dialect.name} does not support altering a table's primary key — recreate "${table.name}" to change it.`,
+        });
+      }
+    }
+
     const deployedIndexes = new Map(deployed.indexes.map((i) => [i.name, i]));
     for (const index of table.indexes) {
       const existingIndex = deployedIndexes.get(index.name);

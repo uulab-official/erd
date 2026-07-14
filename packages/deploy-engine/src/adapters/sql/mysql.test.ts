@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createMySqlDialect } from "./mysql.js";
 import { createMySQLAdapter } from "./adapter.js";
-import { shopModel } from "./test-fixtures.js";
+import { customerEntity, shopModel } from "./test-fixtures.js";
 import { toNativeSchema } from "./toNativeSchema.js";
 import { renderSql } from "./render.js";
+import { planSqlDeployment } from "./plan.js";
 
 describe("createMySqlDialect", () => {
   const dialect = createMySqlDialect();
@@ -101,5 +102,30 @@ describe("createMySQLAdapter", () => {
   it("reports its kind as mysql", () => {
     const adapter = createMySQLAdapter({ execute: async () => {} });
     expect(adapter.kind).toBe("mysql");
+  });
+});
+
+describe("planSqlDeployment with MySQL", () => {
+  const dialect = createMySqlDialect();
+
+  it("plans a DROP+ADD PRIMARY KEY (no constraint name needed) when the primary key column changes", () => {
+    const deployed = shopModel();
+    deployed.adapter = "mysql";
+    const current = {
+      ...deployed,
+      entities: [
+        {
+          ...customerEntity(),
+          attributes: customerEntity().attributes.map((a) => ({
+            ...a,
+            isPrimaryKey: a.name === "email",
+          })),
+        },
+        deployed.entities[1]!,
+      ],
+    };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const step = plan.steps.find((s) => s.target === "customer" && s.action === "alter-attribute");
+    expect(step?.sql).toBe("ALTER TABLE `customer` DROP PRIMARY KEY, ADD PRIMARY KEY (`email`);");
   });
 });

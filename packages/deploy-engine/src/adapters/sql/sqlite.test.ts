@@ -94,6 +94,35 @@ describe("planSqlDeployment with SQLite", () => {
     expect(step?.warning).toMatch(/does not support adding foreign keys/i);
   });
 
+  it("warns instead of guessing at DDL when the primary key column changes", () => {
+    const deployed: Model = {
+      id: "shop",
+      name: "Shop",
+      adapter: "sqlite",
+      entities: [customerEntity()],
+      relationships: [],
+      views: [],
+      sequences: [],
+      enums: [],
+    };
+    const current: Model = {
+      ...deployed,
+      entities: [
+        {
+          ...customerEntity(),
+          attributes: customerEntity().attributes.map((a) => ({
+            ...a,
+            isPrimaryKey: a.name === "email",
+          })),
+        },
+      ],
+    };
+    const plan = planSqlDeployment(current, deployed, dialect);
+    const step = plan.steps.find((s) => s.target === "customer" && s.action === "alter-attribute");
+    expect(step?.sql).toBeUndefined();
+    expect(step?.warning).toMatch(/does not support altering a table's primary key/i);
+  });
+
   it("stamps the plan's adapterKind as sqlite", () => {
     const plan = planSqlDeployment(shopModel(), null, dialect);
     expect(plan.adapterKind).toBe("sqlite");
